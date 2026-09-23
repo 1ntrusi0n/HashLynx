@@ -5,6 +5,8 @@ public sealed class ArchiveHashAnalysisTests
     [Theory]
     [InlineData("$zip2$*", 1_100_000, 0)]
     [InlineData("$zip2$*", 16 * 1024 * 1024 + 300, 1)]
+    [InlineData("$7z$", 1_100_000, 0)]
+    [InlineData("$7z$", 16 * 1024 * 1024 + 300, 1)]
     [InlineData("ordinary", 1_100_000, 1)]
     public async Task InlineAesHasABoundedAllowanceThatDoesNotApplyToFollowingLines(string prefix, int length, int firstProblems)
     {

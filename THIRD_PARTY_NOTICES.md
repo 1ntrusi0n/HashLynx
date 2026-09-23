@@ -10,7 +10,7 @@ HashLynx is an independent application. Hashcat is a separate third-party projec
 
 John the Ripper and utilities such as pdf2john, zip2john, rar2john, and 7z2john are optional external programs. Some are GPL-licensed and may have additional component licenses. Obtain and review the license for the exact tool/version you use. HashLynx does not redistribute them or their source. Python and Perl runtimes also remain separately installed tools with their own licenses.
 
-HashLynx's MIT license does not relicense any external software. Process adapters and output parsers in this repository are HashLynx code. PDF, RAR, 7-Zip and BitLocker extraction implementations remain external; ZIP also has a native implementation described below.
+HashLynx's MIT license does not relicense any external software. Process adapters and output parsers in this repository are HashLynx code. PDF and BitLocker extraction implementations remain external; ZIP, RAR and 7-Zip have native implementations described below.
 
 ## Native ZIP extractor references
 
@@ -26,7 +26,25 @@ Redistribution and use in source and binary forms, with or without
 modification, are permitted.
 ```
 
-No John C source files, support libraries, or executable are included in the application. Hashcat's ZIP module parsers were consulted for interoperability and format limits; no backend module code is bundled. 7-Zip is used only when explicitly selected for the optional development integration test and is not a runtime dependency or redistributed component.
+No John C source files, support libraries, or executable are included in the application. Hashcat's archive module parsers were consulted for interoperability and format limits; no backend module code is bundled. The 7-Zip executable is used only when explicitly selected for development integration tests and is not a runtime dependency or redistributed component.
+
+## Native RAR and 7-Zip references
+
+The native RAR reader implements RAR3/RAR5 metadata parsing using [RARLAB's format documentation](https://www.rarlab.com/technote.htm) and the format/checksum descriptions in Openwall's [rar2john.c](https://github.com/openwall/john/blob/bleeding-jumbo/src/rar2john.c) and [rar2john.h](https://github.com/openwall/john/blob/bleeding-jumbo/src/rar2john.h). The permissive `rar2john.c` notice is retained here:
+
+```text
+This software is Copyright (c) 2011, Dhiru Kholia <dhiru.kholia at gmail.com>
+and (c) 2012, magnum and (c) 2014, JimF
+and it is hereby released to the general public under the following terms:
+Redistribution and use in source and binary forms, with or without
+modification, are permitted.
+```
+
+The native 7z reader is an original implementation of the [7z format specification](https://github.com/ip7z/7zip/blob/main/DOC/7zFormat.txt). The hash field layout documented by philsmd and magnum in [7z2john.pl](https://github.com/openwall/john/blob/bleeding-jumbo/run/7z2john.pl) was consulted for interoperability. No Perl implementation or GPL John support code has been copied or translated into the app.
+
+A small C# LZMA decoder subset from **LZMA SDK 26.03**, by **Igor Pavlov**, is included for compressed archive metadata. **LZMA SDK is written and placed in the public domain by Igor Pavlov.** The SDK is separate from the LGPL 7-Zip application. See [source provenance and scope](src/HashLynx.Extractors/ThirdParty/LzmaSdk/README.md) and the [official SDK license](https://www.7-zip.org/sdk.html). HashLynx adds a bounded, cancellable wrapper; it does not bundle the 7-Zip executable or unRAR library.
+
+Optional RAR integration tests use public known-password fixtures from the `rarfile` and `libarchive` test suites; those downloaded archives remain outside the repository and publish output. The stored RAR3 test uses Hashcat's public mode-23700 self-test data. Normal 7z fixtures are locally generated synthetic archives with a documented test password.
 
 ## Rule presets and starter wordlist
 

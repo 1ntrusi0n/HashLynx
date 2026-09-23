@@ -116,7 +116,7 @@ internal sealed class SmokeApplication(string output) : Application
             }
             listener.Flush();
             Require(errors.Length == 0, "WPF binding failures: " + errors);
-            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all six pages; four attack families; three target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; populated manual catalog expansion, selection and scrolling; populated running/failed Jobs with progress updates; inactive history deletion, Undo, file retention and save-failure rollback; saved Hardware default, Basic selection, Expert overrides, restart persistence; preflight error handling; built-in ZIP availability and explicit-tool override switching; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, automatic result loading, View recovered passwords navigation/reveal, stale-result clearing, native ZIP extraction, confirmed automatic mode selection, and persistent extraction notes passed." : "") + (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice) ? " Real recovery: Start → Jobs → Results recovered the known NTLM fixture in Basic mode with the starter list, Normal preset, and saved Hardware default." : ""));
+            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all six pages; four attack families; three target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; populated manual catalog expansion, selection and scrolling; populated running/failed Jobs with progress updates; inactive history deletion, Undo, file retention and save-failure rollback; saved Hardware default, Basic selection, Expert overrides, restart persistence; preflight error handling; built-in ZIP/RAR/7z availability and explicit-tool override switching; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, automatic result loading, View recovered passwords navigation/reveal, stale-result clearing, native ZIP/RAR/7z extraction, confirmed automatic mode selection, and persistent extraction notes passed." : "") + (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice) ? " Real recovery: Start → Jobs → Results recovered the known NTLM fixture in Basic mode with the starter list, Normal preset, and saved Hardware default." : ""));
             Console.WriteLine("WPF smoke passed. Screenshots and report: " + output);
             Shutdown(0);
         }
@@ -135,15 +135,18 @@ internal sealed class SmokeApplication(string output) : Application
         var page = (ExtractorsViewModel)shell.Navigation.Single(item => item.Page is ExtractorsViewModel).Page;
         shell.Selected = shell.Navigation.Single(item => item.Page == page);
         await page.RefreshAsync();
-        var zip = page.Extractors.Single(item => item.Id == "zip");
-        Require(zip.Status == "Available" && zip.Implementation == "Built-in ZIP extractor" && zip.ToolPath == "", "ZIP must be ready without an external dependency.");
-        zip.ToolPath = Path.Combine(output, "missing-zip2john.exe");
-        await ((AsyncCommand)zip.SaveCommand).ExecuteAsync(null);
-        Require(zip.Status == "Missing dependency" && zip.Implementation != "Built-in ZIP extractor", "An explicit external override must be honored and refresh its implementation label.");
-        zip.ToolPath = "";
-        await ((AsyncCommand)zip.SaveCommand).ExecuteAsync(null);
-        Require(zip.Status == "Available" && zip.Implementation == "Built-in ZIP extractor", "Clearing the tool override must restore native ZIP extraction.");
-        await RenderAsync(window, "Built-in-ZIP");
+        foreach (var id in new[] { "zip", "rar", "7z" })
+        {
+            var row = page.Extractors.Single(item => item.Id == id);
+            Require(row.Status == "Available" && row.Implementation.StartsWith("Built-in", StringComparison.Ordinal) && row.ToolPath == "", $"{id} must be ready without an external dependency.");
+            row.ToolPath = Path.Combine(output, "missing-" + id + "2john.exe");
+            await ((AsyncCommand)row.SaveCommand).ExecuteAsync(null);
+            Require(row.Status == "Missing dependency" && !row.Implementation.StartsWith("Built-in", StringComparison.Ordinal), "An explicit external override must be honored and refresh its implementation label.");
+            row.ToolPath = "";
+            await ((AsyncCommand)row.SaveCommand).ExecuteAsync(null);
+            Require(row.Status == "Available" && row.Implementation.StartsWith("Built-in", StringComparison.Ordinal), "Clearing the tool override must restore native archive extraction.");
+        }
+        await RenderAsync(window, "Built-in-archives");
     }
 
     private async Task CheckNativeZipInspectorAsync(ShellViewModel shell, AppServices services, Window window)
@@ -169,6 +172,20 @@ internal sealed class SmokeApplication(string output) : Application
         shell.Selected = shell.Navigation[0];
         await RenderAsync(window, "Native-ZIP-analysis");
         Require(Find<TextBlock>(window, "ExtractionNotice").IsVisible, "Extraction notes must be visible without opening the problem-lines expander.");
+        foreach (var (extension, fixture, mode) in new[]
+        {
+            ("7z", HashLynx.Extractors.Tests.NativeArchiveFixtures.Solid, 11600),
+            ("rar", Convert.FromBase64String("UmFyIRoHAM+QcwAADQAAAAAAAABz53QEhCkAEAAAAA4AAAACSbCoRgAAAAAdMAEAIAAAAGHlSnNymIfLUzRiC8yoF2ZCohCxBRkBkh4EsHsAAAcA"), 23700)
+        })
+        {
+            var archivePath = Path.Combine(services.Store.Paths.Root, "known-test-archive." + extension);
+            await File.WriteAllBytesAsync(archivePath, fixture);
+            inspector.TargetPath = archivePath;
+            await inspector.AnalyzeAsync();
+            Require(inspector.SelectedMode?.Mode == mode, $"Native {extension} must select a Hashcat-confirmed recovery mode.");
+            await RenderAsync(window, "Native-" + extension + "-analysis");
+            Require(Find<TextBlock>(window, "ExtractionNotice").IsVisible, "The archive selection note must remain visible.");
+        }
         inspector.InputMode = 0; inspector.HashText = "new target";
         Require(inspector.ExtractionNotice == "" && inspector.SelectedMode is null, "Changing targets must clear ZIP extraction notes and the selected mode.");
     }

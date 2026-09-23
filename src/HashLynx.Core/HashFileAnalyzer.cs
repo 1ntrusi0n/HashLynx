@@ -29,7 +29,7 @@ public sealed class HashFileAnalyzer
             result.TotalLines++;
             if (!item.Truncated && string.IsNullOrWhiteSpace(line)) { result.BlankLines++; continue; }
             string? problem = null;
-            if (item.Truncated) problem = "Line exceeds the analysis limit (1 MiB, or 16 MiB + 256 characters for WinZip AES records); inspect the source format. Analysis retained only a bounded prefix.";
+            if (item.Truncated) problem = "Line exceeds the analysis limit (1 MiB, or 16 MiB + 256 characters for WinZip AES and 7-Zip records); inspect the source format. Analysis retained only a bounded prefix.";
             else if (line.Contains('\0')) problem = "Contains binary NUL data; this may not be a text hash list.";
             else if (line != line.Trim()) problem = "Leading or trailing whitespace may affect parsing.";
             if (problem is not null)
@@ -77,7 +77,7 @@ public sealed class HashFileAnalyzer
                     if (line.Length < maxLength)
                     {
                         line.Append(character);
-                        if (line.Length == 7 && line.ToString() == "$zip2$*") maxLength = zipMaxLength;
+                        if ((line.Length == 7 && line.ToString() == "$zip2$*") || (line.Length == 4 && line.ToString() == "$7z$")) maxLength = zipMaxLength;
                     }
                     else truncated = true;
                 }

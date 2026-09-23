@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\HashLynx.UI\HashLynx.UI.csproj" />
+    <Compile Include="..\HashLynx.Extractors.Tests\NativeArchiveFixtures.cs" Link="Fixtures\NativeArchiveFixtures.cs" />
   </ItemGroup>
 </Project>

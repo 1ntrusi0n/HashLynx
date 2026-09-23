@@ -18,7 +18,7 @@ internal sealed class ExternalZipHashExtractor(ExtractorConfiguration? configura
     public override IReadOnlyList<string> SupportedExtensions => [".zip", ".zipx"];
 }
 
-public sealed class RarHashExtractor(ExtractorConfiguration? configuration = null, IExtractorProcessRunner? runner = null)
+internal sealed class ExternalRarHashExtractor(ExtractorConfiguration? configuration = null, IExtractorProcessRunner? runner = null)
     : ExternalHashExtractor(configuration, runner, "rar2john.exe")
 {
     public override string Id => "rar";
@@ -27,7 +27,7 @@ public sealed class RarHashExtractor(ExtractorConfiguration? configuration = nul
     public override IReadOnlyList<string> SupportedExtensions => [".rar"];
 }
 
-public sealed class SevenZipHashExtractor(ExtractorConfiguration? configuration = null, IExtractorProcessRunner? runner = null)
+internal sealed class ExternalSevenZipHashExtractor(ExtractorConfiguration? configuration = null, IExtractorProcessRunner? runner = null)
     : ExternalHashExtractor(configuration, runner, "7z2john.exe", "7z2john.pl", "7z2john.py")
 {
     public override string Id => "7z";
