@@ -9,7 +9,7 @@ public sealed class PdfHashExtractor(ExtractorConfiguration? configuration = nul
     public override IReadOnlyList<string> SupportedExtensions => [".pdf"];
 }
 
-public sealed class ZipHashExtractor(ExtractorConfiguration? configuration = null, IExtractorProcessRunner? runner = null)
+internal sealed class ExternalZipHashExtractor(ExtractorConfiguration? configuration = null, IExtractorProcessRunner? runner = null)
     : ExternalHashExtractor(configuration, runner, "zip2john.exe")
 {
     public override string Id => "zip";

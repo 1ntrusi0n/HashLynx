@@ -15,5 +15,7 @@
     <ProjectReference Include="../HashLynx.Persistence/HashLynx.Persistence.csproj" />
     <Resource Include="../../assets/branding/logo.png" Link="Assets/logo.png" />
     <Resource Include="../../assets/branding/logo_withText.png" Link="Assets/logo_withText.png" />
+    <None Include="../../THIRD_PARTY_NOTICES.md" Link="THIRD_PARTY_NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="../../LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

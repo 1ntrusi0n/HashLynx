@@ -18,6 +18,9 @@ public sealed class InspectorViewModel : ObservableObject
     private string _hashText = "", _targetPath = "", _summary = "Choose a target, then analyze it with your installed Hashcat release.", _search = "", _context = "Unknown / Not sure", _problems = "";
     private HashMode? _selectedMode;
     private string _validationMessage = "";
+    private string _extractionNotice = "";
+    public string ExtractionNotice { get => _extractionNotice; private set => Set(ref _extractionNotice, value); }
+    private IReadOnlyList<int> _extractionSuggestedModes = [];
     public int InputMode { get => _inputMode; set { if (Set(ref _inputMode, value)) Invalidate(); } }
     public string HashText { get => _hashText; set { if (Set(ref _hashText, value)) Invalidate(); } }
     public string TargetPath { get => _targetPath; set { if (Set(ref _targetPath, value)) Invalidate(); } }
@@ -46,7 +49,7 @@ public sealed class InspectorViewModel : ObservableObject
         AnalyzeCommand = new AsyncCommand(_ => AnalyzeAsync(), services.ReportError);
         RefreshCatalogCommand = new AsyncCommand(_ => LoadCatalogAsync(), services.ReportError);
     }
-    private void Invalidate() { _targetCancellation.Cancel(); _targetCancellation.Dispose(); _targetCancellation = CancellationTokenSource.CreateLinkedTokenSource(_services.LifetimeToken); _revision++; PreparedTargetPath = null; Matches.Clear(); SelectedMode = null; Summary = "Target changed. Analyze it or choose a hash mode explicitly."; Problems = ""; }
+    private void Invalidate() { _targetCancellation.Cancel(); _targetCancellation.Dispose(); _targetCancellation = CancellationTokenSource.CreateLinkedTokenSource(_services.LifetimeToken); _revision++; PreparedTargetPath = null; ExtractionNotice = ""; _extractionSuggestedModes = []; Matches.Clear(); SelectedMode = null; Summary = "Target changed. Analyze it or choose a hash mode explicitly."; Problems = ""; }
     private void VerifyRevision(long revision) { if (revision != _revision) throw new InvalidOperationException("The target changed while analysis was running. Analyze the current target again."); }
     public async Task LoadCatalogAsync()
     {
@@ -93,6 +96,8 @@ public sealed class InspectorViewModel : ObservableObject
                 prepared = await _services.Store.Paths.CreateTargetAsync(string.Join(Environment.NewLine, result.Hashes) + Environment.NewLine, cancellationToken);
                 VerifyRevision(revision);
                 Summary = $"{result.ExtractorName} extracted {result.Hashes.Count} hash record(s).";
+                ExtractionNotice = string.Join(Environment.NewLine, result.Diagnostics);
+                _extractionSuggestedModes = result.SuggestedHashcatModes;
                 break;
             }
             if (prepared is null) throw new InvalidOperationException(string.Join(Environment.NewLine, diagnostics));
@@ -113,8 +118,9 @@ public sealed class InspectorViewModel : ObservableObject
         VerifyRevision(revision);
         Problems = string.Join(Environment.NewLine, analysis.Problems.Select(problem => $"Line {problem.LineNumber}: {problem.Reason}").Concat(analysis.StructuralGroups.Select(group => $"Structure: {group.Key} — {group.Value:N0} lines")));
         Matches.Clear(); foreach (var match in matches) Matches.Add(match);
-        SelectedMode = matches.Count == 1 ? matches[0] : null;
+        var suggestedMatches = matches.Where(mode => _extractionSuggestedModes.Contains(mode.Mode)).ToArray();
+        SelectedMode = matches.Count == 1 ? matches[0] : suggestedMatches.Length == 1 ? suggestedMatches[0] : null;
         Summary = $"{analysis.TotalLines:N0} lines · {analysis.CandidateLines:N0} candidates · {analysis.BlankLines:N0} blank · {analysis.ProblemLines:N0} problem lines. " +
-            (matches.Count == 1 ? "One Hashcat match selected; confirm it matches your source." : matches.Count > 1 ? $"{matches.Count} possible modes. Select the correct mode explicitly; shape alone is ambiguous." : "Hashcat found no matches. Check your input or select a mode manually.");
+            (matches.Count == 1 ? "One Hashcat match selected; confirm it matches your source." : SelectedMode is not null ? "The extractor's mode was confirmed by Hashcat and selected from the compatible modes." : matches.Count > 1 ? $"{matches.Count} possible modes. Select the correct mode explicitly; shape alone is ambiguous." : "Hashcat found no matches. Check your input or select a mode manually.");
     }
 }

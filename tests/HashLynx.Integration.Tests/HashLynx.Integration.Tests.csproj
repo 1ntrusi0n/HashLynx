@@ -11,5 +11,6 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <ProjectReference Include="..\..\src\HashLynx.Hashcat\HashLynx.Hashcat.csproj" />
+    <ProjectReference Include="..\..\src\HashLynx.Extractors\HashLynx.Extractors.csproj" />
   </ItemGroup>
 </Project>

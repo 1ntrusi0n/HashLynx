@@ -73,6 +73,7 @@ internal sealed class SmokeApplication(string output) : Application
             await CheckPopulatedJobsAsync(shell, window);
             await CheckSessionHistoryAsync(shell, store, window);
             await CheckSessionResultsIsolationAsync(shell, store, window);
+            await CheckZipConfigurationAsync(shell, window);
 
             shell.Selected = shell.Navigation[0];
             for (var family = 0; family < 4; family++)
@@ -104,6 +105,7 @@ internal sealed class SmokeApplication(string output) : Application
             Require(services.Notice.Contains("Hashcat", StringComparison.Ordinal), "Preflight without backend must explain configuration.");
             var backendPath = Environment.GetEnvironmentVariable("HASHLYNX_TEST_HASHCAT");
             if (File.Exists(backendPath)) await CheckConnectedWorkflowAsync(shell, services, window, backendPath);
+            if (File.Exists(backendPath)) await CheckNativeZipInspectorAsync(shell, services, window);
             var recoveryDevice = Environment.GetEnvironmentVariable("HASHLYNX_TEST_DEVICE");
             if (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice)) await CheckRecoveryWorkflowAsync(shell, services, window, recoveryDevice);
             foreach (var theme in new[] { "Light", "Dark", "System" })
@@ -114,7 +116,7 @@ internal sealed class SmokeApplication(string output) : Application
             }
             listener.Flush();
             Require(errors.Length == 0, "WPF binding failures: " + errors);
-            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all six pages; four attack families; three target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; populated manual catalog expansion, selection and scrolling; populated running/failed Jobs with progress updates; inactive history deletion, Undo, file retention and save-failure rollback; saved Hardware default, Basic selection, Expert overrides, restart persistence; preflight error handling; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, automatic result loading, View recovered passwords navigation/reveal, and stale-result clearing passed." : "") + (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice) ? " Real recovery: Start → Jobs → Results recovered the known NTLM fixture in Basic mode with the starter list, Normal preset, and saved Hardware default." : ""));
+            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all six pages; four attack families; three target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; populated manual catalog expansion, selection and scrolling; populated running/failed Jobs with progress updates; inactive history deletion, Undo, file retention and save-failure rollback; saved Hardware default, Basic selection, Expert overrides, restart persistence; preflight error handling; built-in ZIP availability and explicit-tool override switching; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, automatic result loading, View recovered passwords navigation/reveal, stale-result clearing, native ZIP extraction, confirmed automatic mode selection, and persistent extraction notes passed." : "") + (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice) ? " Real recovery: Start → Jobs → Results recovered the known NTLM fixture in Basic mode with the starter list, Normal preset, and saved Hardware default." : ""));
             Console.WriteLine("WPF smoke passed. Screenshots and report: " + output);
             Shutdown(0);
         }
@@ -126,6 +128,49 @@ internal sealed class SmokeApplication(string output) : Application
             Shutdown(1);
         }
         finally { PresentationTraceSources.DataBindingSource.Listeners.Remove(listener); }
+    }
+
+    private async Task CheckZipConfigurationAsync(ShellViewModel shell, Window window)
+    {
+        var page = (ExtractorsViewModel)shell.Navigation.Single(item => item.Page is ExtractorsViewModel).Page;
+        shell.Selected = shell.Navigation.Single(item => item.Page == page);
+        await page.RefreshAsync();
+        var zip = page.Extractors.Single(item => item.Id == "zip");
+        Require(zip.Status == "Available" && zip.Implementation == "Built-in ZIP extractor" && zip.ToolPath == "", "ZIP must be ready without an external dependency.");
+        zip.ToolPath = Path.Combine(output, "missing-zip2john.exe");
+        await ((AsyncCommand)zip.SaveCommand).ExecuteAsync(null);
+        Require(zip.Status == "Missing dependency" && zip.Implementation != "Built-in ZIP extractor", "An explicit external override must be honored and refresh its implementation label.");
+        zip.ToolPath = "";
+        await ((AsyncCommand)zip.SaveCommand).ExecuteAsync(null);
+        Require(zip.Status == "Available" && zip.Implementation == "Built-in ZIP extractor", "Clearing the tool override must restore native ZIP extraction.");
+        await RenderAsync(window, "Built-in-ZIP");
+    }
+
+    private async Task CheckNativeZipInspectorAsync(ShellViewModel shell, AppServices services, Window window)
+    {
+        // Structural fixture only: dummy encrypted bytes are identified, never attacked.
+        // Independently generated real encrypted ZIP recovery is covered by the opt-in integration test.
+        using var memory = new MemoryStream();
+        using (var archive = new System.IO.Compression.ZipArchive(memory, System.IO.Compression.ZipArchiveMode.Create, true))
+        using (var entry = archive.CreateEntry("synthetic.txt", System.IO.Compression.CompressionLevel.NoCompression).Open())
+            entry.Write(new byte[16]);
+        var bytes = memory.ToArray();
+        var directory = (int)System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(bytes.Length - 6, 4));
+        bytes[6] |= 1; bytes[directory + 8] |= 1;
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(22, 4), 4);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(directory + 24, 4), 4);
+        var path = Path.Combine(services.Store.Paths.Root, "synthetic-structure.zip");
+        await File.WriteAllBytesAsync(path, bytes);
+        var inspector = shell.Attack.Inspector;
+        inspector.InputMode = 2; inspector.TargetPath = path;
+        await inspector.AnalyzeAsync();
+        Require(inspector.SelectedMode?.Mode == 17210, "ZIP metadata plus Hashcat identification must automatically select the single-member stored mode.");
+        Require(inspector.ExtractionNotice.Contains("different passwords", StringComparison.Ordinal), "The selected-member limitation must survive target analysis.");
+        shell.Selected = shell.Navigation[0];
+        await RenderAsync(window, "Native-ZIP-analysis");
+        Require(Find<TextBlock>(window, "ExtractionNotice").IsVisible, "Extraction notes must be visible without opening the problem-lines expander.");
+        inspector.InputMode = 0; inspector.HashText = "new target";
+        Require(inspector.ExtractionNotice == "" && inspector.SelectedMode is null, "Changing targets must clear ZIP extraction notes and the selected mode.");
     }
 
     private async Task CheckSimpleWorkflowAsync(ShellViewModel shell, PersistenceStore store, Window window)

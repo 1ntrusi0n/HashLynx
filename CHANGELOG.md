@@ -15,6 +15,8 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ### Added
 
+- Built-in, read-only ZIP extraction for stored/deflated ZipCrypto and WinZip AES-128/192/256, including single-volume ZIP64 and data descriptors. Selects one small supported encrypted member, reports the selection and per-member password limitation, and retains an explicit external zip2john override.
+- Bounded ZIP parsing and malformed-archive tests, plus an opt-in 7-Zip-to-Hashcat recovery test covering all five supported encryption/compression combinations. Native format attribution and application license notices are included in publish output.
 - **Show All Sessions Results** combines the results of sessions in history with a source Session column. CSV exports include session names and IDs; deleted sessions are excluded and Undo restores their rows.
 - Jobs now provides **View recovered passwords**, which opens that session's hash/password table and reveals the results on request. Completed recoveries show a clear message, and selecting a session on Results loads it automatically.
 - Inactive sessions can be deleted from history, with Undo until the application closes. Recovery files are retained; running and paused sessions cannot be deleted.
@@ -25,6 +27,7 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ### Changed
 
+- Successful extraction notes remain visible in Target Inspector. A uniquely suggested extractor mode is automatically selected only when confirmed by installed Hashcat identification. Tagged WinZip AES lines have a bounded larger analysis allowance for inline ciphertext.
 - New Dictionary attacks default to **No Rules**. The dropdown also offers Quick, Normal, Heavy, and Super; No Rules passes no rule file to Hashcat. Saved preset/custom-rule choices are preserved, and no-rule profiles load with No Rules selected.
 - Start recovery performs target identification and preflight automatically; ambiguous hashes still require an explicit mode choice.
 - Run options, custom rule files, separate Preflight, and command preview are Expert controls. Basic mode uses managed defaults and excludes hidden Expert settings from jobs.

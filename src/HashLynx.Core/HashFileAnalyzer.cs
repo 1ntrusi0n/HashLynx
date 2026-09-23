@@ -29,7 +29,7 @@ public sealed class HashFileAnalyzer
             result.TotalLines++;
             if (!item.Truncated && string.IsNullOrWhiteSpace(line)) { result.BlankLines++; continue; }
             string? problem = null;
-            if (item.Truncated) problem = "Line exceeds 1 MiB; inspect the source format. Analysis retained only a bounded prefix.";
+            if (item.Truncated) problem = "Line exceeds the analysis limit (1 MiB, or 16 MiB + 256 characters for WinZip AES records); inspect the source format. Analysis retained only a bounded prefix.";
             else if (line.Contains('\0')) problem = "Contains binary NUL data; this may not be a text hash list.";
             else if (line != line.Trim()) problem = "Leading or trailing whitespace may affect parsing.";
             if (problem is not null)
@@ -47,7 +47,9 @@ public sealed class HashFileAnalyzer
 
     private static async IAsyncEnumerable<(string Text, bool Truncated)> ReadBoundedLinesAsync(StreamReader reader, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        const int maxLength = 1_048_576;
+        const int ordinaryMaxLength = 1_048_576;
+        const int zipMaxLength = 16 * 1024 * 1024 + 256;
+        var maxLength = ordinaryMaxLength;
         var buffer = new char[16384];
         var line = new StringBuilder();
         var truncated = false;
@@ -65,13 +67,18 @@ public sealed class HashFileAnalyzer
                     {
                         yield return (line.ToString(), truncated);
                         line.Clear(); truncated = false;
+                        maxLength = ordinaryMaxLength;
                     }
                     previousCarriageReturn = character == '\r';
                 }
                 else
                 {
                     previousCarriageReturn = false;
-                    if (line.Length < maxLength) line.Append(character);
+                    if (line.Length < maxLength)
+                    {
+                        line.Append(character);
+                        if (line.Length == 7 && line.ToString() == "$zip2$*") maxLength = zipMaxLength;
+                    }
                     else truncated = true;
                 }
             }

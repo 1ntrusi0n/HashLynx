@@ -40,6 +40,7 @@ public sealed class ExtractorViewModel : ObservableObject
         _services.Settings.ExtractorTools[Id] = new ExtractorToolSettings { ToolPath = string.IsNullOrWhiteSpace(ToolPath) ? null : ToolPath, InterpreterPath = string.IsNullOrWhiteSpace(InterpreterPath) ? null : InterpreterPath };
         await _services.Store.SaveSettingsAsync(_services.Settings);
         _services.RebuildExtractors(); _extractor = _services.Extractors.All.First(item => item.Id == Id);
+        Raise(nameof(Description)); Raise(nameof(Implementation));
     }
     public async Task RefreshAsync(bool validate)
     {

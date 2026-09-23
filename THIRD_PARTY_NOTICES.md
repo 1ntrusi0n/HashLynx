@@ -10,7 +10,23 @@ HashLynx is an independent application. Hashcat is a separate third-party projec
 
 John the Ripper and utilities such as pdf2john, zip2john, rar2john, and 7z2john are optional external programs. Some are GPL-licensed and may have additional component licenses. Obtain and review the license for the exact tool/version you use. HashLynx does not redistribute them or their source. Python and Perl runtimes also remain separately installed tools with their own licenses.
 
-HashLynx's MIT license does not relicense any external software. Process adapters and output parsers in this repository are HashLynx code; the extraction implementations remain external.
+HashLynx's MIT license does not relicense any external software. Process adapters and output parsers in this repository are HashLynx code. PDF, RAR, 7-Zip and BitLocker extraction implementations remain external; ZIP also has a native implementation described below.
+
+## Native ZIP extractor references
+
+The C# ZIP reader is a HashLynx implementation of the [PKWARE ZIP specification](https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT) and [WinZip AE-1/AE-2 specification](https://www.winzip.com/en/support/aes-encryption/). Its hash serialization is informed by the formats and checksum selection documented in Openwall's [zip2john.c](https://github.com/openwall/john/blob/bleeding-jumbo/src/zip2john.c), consulted September 23, 2026. That individual source file grants permissive redistribution rights separately from John's main program license. Its notice is retained here:
+
+```text
+This software is
+Copyright (c) 2011-2018 Dhiru Kholia <dhiru.kholia at gmail.com>,
+Copyright (c) 2011-2018 JimF, Copyright (c) 2020 Simon Rettberg,
+Copyright (c) 2013-2021 magnum,
+and it is hereby released to the general public under the following terms:
+Redistribution and use in source and binary forms, with or without
+modification, are permitted.
+```
+
+No John C source files, support libraries, or executable are included in the application. Hashcat's ZIP module parsers were consulted for interoperability and format limits; no backend module code is bundled. 7-Zip is used only when explicitly selected for the optional development integration test and is not a runtime dependency or redistributed component.
 
 ## Rule presets and starter wordlist
 

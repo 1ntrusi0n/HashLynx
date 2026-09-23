@@ -127,14 +127,16 @@ The manager shows every registered extractor and its dependency status. Configur
 | Family | Adapter | Required separately |
 | --- | --- | --- |
 | PDF | External pdf2john | Compatible tool; Python or Perl if a script |
-| ZIP | External zip2john | Compatible executable/tool |
+| ZIP | Built-in ZipCrypto and WinZip AES; optional zip2john override | None for built-in formats |
 | RAR | External rar2john | Compatible executable/tool |
 | 7-Zip | External 7z2john | Compatible tool; interpreter if a script |
 | BitLocker | Hashcat-supplied bitlocker2hashcat.py | Script in the configured release and Python 3 |
 
 Header inspection and extension checks guide selection. Adapter results normalize supported John output into hash strings and feed the normal identification workflow. Suggested modes are hints, not a replacement for Hashcat identification. External tool output formats may differ by release; unsupported or failed output is diagnosed rather than presented as successful extraction.
 
-BitLocker initially supports partition images recognized at offset zero with a user-password protector. TPM-only protectors, recovery-password cracking, and automatic whole-disk partition offset discovery are not implemented. See [extractor details](docs/extractors.md) for configuration, format support, and extension guidance. No John the Ripper source or binaries are redistributed.
+ZIP works immediately with an empty tool path. It supports stored/deflated ZipCrypto, AES-128/192/256, ZIP64 and data descriptors. It selects the smallest supported encrypted member; recovery verifies that member, since other members may have different passwords. Full-data limits are 320 KiB per ZipCrypto member and less than 8 MiB of AES ciphertext. Unsupported variants can use an explicitly configured external zip2john tool. Clear its path to return to the built-in extractor. Target Inspector retains extraction notes and selects a uniquely suggested mode only after Hashcat confirms it.
+
+BitLocker initially supports partition images recognized at offset zero with a user-password protector. TPM-only protectors, recovery-password cracking, and automatic whole-disk partition offset discovery are not implemented. See [extractor details](docs/extractors.md) for configuration, format support, and extension guidance, and [third-party notices](THIRD_PARTY_NOTICES.md) for the native ZIP format references. No John binaries or scripts are redistributed.
 
 ## Privacy, data, and diagnostics
 
@@ -164,7 +166,7 @@ These files are **not encrypted by HashLynx**. Result files and potfiles contain
 | `src/HashLynx.UI` | WPF views, view models, navigation, themes, dialogs, application composition |
 | `src/HashLynx.Core` | Domain/job/profile models, mask validation, streaming file inspection |
 | `src/HashLynx.Hashcat` | Discovery/capabilities, command construction, preflight, process execution, status/catalog/device/result parsers |
-| `src/HashLynx.Extractors` | `IHashExtractor`, registry, header inspection, external adapters, dependency checks |
+| `src/HashLynx.Extractors` | `IHashExtractor`, registry, native ZIP reader, header inspection, external adapters, dependency checks |
 | `src/HashLynx.Persistence` | Per-user paths, atomic JSON stores, structured logging |
 | `tests/` | xUnit unit tests, opt-in backend integration checks, WPF smoke harness |
 | `assets/branding` | PNG resources and multi-size ICO |
@@ -182,7 +184,7 @@ $env:HASHLYNX_TEST_HASHCAT = (Resolve-Path .\hashcat\hashcat.exe).Path
 dotnet test tests/HashLynx.Integration.Tests -c Release --filter Category=Integration
 ```
 
-This is an integration check, not a claim of recovery support on every driver. Local validation used Hashcat **v7.1.2**. Its initial Intel runtime failed; after an explicitly approved Intel CPU runtime 2026.0 installation, known-answer MD5 and NTLM CPU recovery passed, including the WPF Start → Jobs → Results flow. The legacy GPU and interactive controls remain unverified. No warning-suppression flags were used. Real encrypted fixtures and broader hardware coverage are still needed.
+This is an integration check, not a claim of recovery support on every driver. Local validation used Hashcat **v7.1.2**. Its initial Intel runtime failed; after an explicitly approved Intel CPU runtime 2026.0 installation, known-answer MD5 and NTLM CPU recovery passed, including the WPF Start → Jobs → Results flow. The legacy GPU and interactive controls remain unverified. No warning-suppression flags were used. Native ZIP extraction, Hashcat identification, CPU recovery, and session result reading also passed for real 7-Zip-generated stored/deflated ZipCrypto and AES-128/192/256 fixtures. Broader archive-producer and hardware coverage is still needed. See [ZIP test instructions](docs/extractors.md) for the optional encrypted-archive check.
 
 Run `dotnet run --project tests/HashLynx.UI.Smoke -c Release -- artifacts/ui-smoke` for isolated missing-backend startup, all page/template loading, attack/input/theme layouts, Basic/Expert control visibility, bundled content, legacy/custom profiles, populated manual-catalog expansion/selection/scrolling, and WPF binding checks. With `HASHLYNX_TEST_HASHCAT` set, it also checks catalog search, automatic validation, and preset command generation. Screenshots and the pass/fail report stay under the ignored artifacts directory. CI also runs this harness.
 
