@@ -16,7 +16,7 @@ public sealed class ShellViewModel : ObservableObject
     public SettingsViewModel Settings { get; }
     public ExtractorsViewModel Extractors { get; }
     public ObservableCollection<NavigationItem> Navigation { get; }
-    public NavigationItem Selected { get => _selected; set { if (Set(ref _selected, value)) Raise(nameof(CurrentPage)); } }
+    public NavigationItem Selected { get => _selected; set { if (Set(ref _selected, value)) { Raise(nameof(CurrentPage)); if (value.Page is ResultsViewModel results) results.SelectedJob = Jobs.Selected ?? results.SelectedJob; } } }
     public object CurrentPage => Selected.Page;
     public ShellViewModel(AppServices services)
     {
@@ -24,6 +24,12 @@ public sealed class ShellViewModel : ObservableObject
         Jobs = new(services); Settings = new(services); Extractors = new(services);
         Attack = new(services, Jobs, () => Selected = Navigation!.First(item => item.Page == Jobs));
         Navigation = [new("Attack", "\uE945", Attack), new("Jobs", "\uE9D9", Jobs), new("Results", "\uE8D7", new ResultsViewModel(services, Jobs)), new("Hardware", "\uE7F4", new HardwareViewModel(services)), new("Extractors", "\uE8B7", Extractors), new("Settings / About", "\uE713", Settings)];
+        Jobs.ResultsRequested += async job =>
+        {
+            var page = Navigation.Single(item => item.Page is ResultsViewModel);
+            Selected = page;
+            await ((ResultsViewModel)page.Page).OpenAsync(job, reveal: true);
+        };
         _selected = Navigation[0];
         services.BackendChanged += () => { if (_initialized) _ = RefreshBackendDataAsync(); };
     }

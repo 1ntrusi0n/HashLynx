@@ -1,5 +1,13 @@
 # Validation
 
+## Recovered passwords and session history actions — 2026-09-23
+
+- Jobs provides a View recovered passwords action and a completion message. Connected WPF smoke verifies that the action opens the matching session, loads the hash/password pair, and reveals the requested password; direct session selection remains masked initially. The session dropdown displays the job name.
+- History deletion and Undo persist across store reloads, preserve output files, and reject running/paused sessions. The smoke checks deletion of the last entry, selection cleanup, rollback when the history cannot be written, and restoration with Undo. No real user session was deleted during validation.
+- Result loads cancel when selection changes. Tests verify that clearing/deleting a selected session removes its results and disables stale clipboard actions, including while loading is in flight.
+- An actual Basic-mode NTLM recovery on CPU device 3 passed through Start → Jobs → View recovered passwords, showing the expected public fixture password. Hiding the password again also passed.
+- Release build passed with zero warnings/errors. All 166 standard tests passed, with three opt-in backend tests skipped in that run; the connected WPF checks and real recovery passed separately with zero binding errors.
+
 ## Optional rules and No Rules default — 2026-09-23
 
 - New Dictionary configurations select No Rules before Quick, Normal, Heavy, and Super. No Rules stores a null preset ID and an empty custom rule list; no backend preset assets or IDs changed.

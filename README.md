@@ -84,7 +84,11 @@ Or run `./scripts/build.ps1 -Publish`. Copy the publish directory as a unit. Obt
 1. Add a pasted hash, hash file, or encrypted file in Target Inspector.
 2. For a Dictionary attack, use the included starter wordlist or choose your own. **No Rules** is selected by default, so words are tried unchanged. Choose a preset if you want variations.
 3. Press **Start recovery**. HashLynx identifies the target when needed and checks the configuration automatically. If several hash modes match, choose the correct mode and press Start again.
-4. Monitor the job on Jobs and refresh its Results after recovery.
+4. On **Jobs**, select the session and click **View recovered passwords**. HashLynx opens its recovered **Hash** and **Password** table and reveals the passwords you requested. Select a row to copy its password, or export the results to CSV.
+
+Selecting a session directly on **Results** loads its results automatically, with passwords initially hidden. Use **Show passwords** to reveal or hide them; **Refresh results** checks for additional recoveries from an ongoing job.
+
+To clean up history, select an inactive session on **Jobs** and click **Delete session**. **Undo delete** restores removed entries while HashLynx remains open. Deletion removes the history entry only: target, output, checkpoint, and potfile data remain on disk. Running and paused sessions cannot be deleted.
 
 Basic mode manages devices, session names, result paths, and other run settings. Enable **Expert mode** to select custom rule files, adjust run options, or use the separate Preflight and command-preview controls. Existing profiles with custom rules or advanced options open Expert mode so their saved behavior remains visible. Mask, Hybrid, and Combinator attacks remain available for users who need them.
 

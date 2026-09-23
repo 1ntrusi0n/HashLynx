@@ -11,6 +11,7 @@ namespace HashLynx.UI.ViewModels;
 
 public sealed class JobViewModel(JobRecord record) : ObservableObject
 {
+    public override string ToString() => Name;
     public JobRecord Record { get; } = record;
     public string Name => Record.Name;
     public string State => Record.LatestStatus?.State is { } status && Record.State is JobState.Running or JobState.Paused ? status : Record.State.ToString();
@@ -26,6 +27,8 @@ public sealed class JobViewModel(JobRecord record) : ObservableObject
     public string Output => Record.Configuration.Options.OutputPath ?? "";
     public string Created => Record.CreatedAt.LocalDateTime.ToString("g");
     public IReadOnlyList<DeviceStatus> Devices => Record.LatestStatus?.Devices ?? [];
+    public bool HasRecovered => Record.State == JobState.Cracked || Record.LatestStatus?.RecoveredHashes > 0;
+    public string RecoveryMessage => HasRecovered ? "Passwords recovered. Open the results to see each hash and its password." : "Open results to check for passwords recovered during this session.";
     public bool CanRestore => Record.State is not (JobState.Running or JobState.Paused) && File.Exists(Record.RestorePath ?? Record.Configuration.Options.RestorePath);
     public void Refresh() => Raise("");
 }
@@ -39,8 +42,9 @@ public sealed class JobsViewModel : ObservableObject
     private DateTimeOffset _lastPersisted = DateTimeOffset.UtcNow;
     private readonly DispatcherTimer _clock;
     private JobViewModel? _selected;
+    private readonly Stack<(JobViewModel Job, int Index)> _deleted = [];
     public ObservableCollection<JobViewModel> Jobs { get; } = [];
-    public JobViewModel? Selected { get => _selected; set => Set(ref _selected, value); }
+    public JobViewModel? Selected { get => _selected; set { if (Set(ref _selected, value)) CommandManager.InvalidateRequerySuggested(); } }
     public bool HasRunning => _running.Count > 0;
     public ICommand PauseCommand { get; }
     public ICommand ResumeCommand { get; }
@@ -48,14 +52,44 @@ public sealed class JobsViewModel : ObservableObject
     public ICommand StopCommand { get; }
     public ICommand RefreshCommand { get; }
     public ICommand RestoreCommand { get; }
+    public ICommand ViewResultsCommand { get; }
+    public ICommand DeleteCommand { get; }
+    public ICommand UndoDeleteCommand { get; }
+    public event Func<JobViewModel, Task>? ResultsRequested;
     public JobsViewModel(AppServices services)
     {
         _services = services;
+        ViewResultsCommand = new AsyncCommand(async _ => { if (Selected is { } job && ResultsRequested is { } open) await open(job); }, services.ReportError, _ => Selected is not null);
+        DeleteCommand = new AsyncCommand(_ => DeleteSelectedAsync(), services.ReportError, _ => Selected is { } job && CanDelete(job));
+        UndoDeleteCommand = new AsyncCommand(_ => UndoDeleteAsync(), services.ReportError, _ => _deleted.Count > 0);
         PauseCommand = Control(HashcatControl.Pause); ResumeCommand = Control(HashcatControl.Resume); CheckpointCommand = Control(HashcatControl.Checkpoint); RefreshCommand = Control(HashcatControl.Status);
         StopCommand = new AsyncCommand(async _ => { if (Selected is { } job && _running.TryGetValue(job.Record.Id, out var running) && services.Dialogs.Confirm("Stop this recovery job? A checkpoint stop is available separately if you want Hashcat to finish the current checkpoint.", "Stop job")) await running.StopAsync(); }, services.ReportError, _ => Selected is not null && _running.ContainsKey(Selected.Record.Id));
         RestoreCommand = new AsyncCommand(async _ => { if (Selected is { CanRestore: true } job) await LaunchAsync(job, true); }, services.ReportError, _ => Selected?.CanRestore == true);
         _clock = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => Tick(), Dispatcher.CurrentDispatcher);
         _clock.Start();
+    }
+    private bool CanDelete(JobViewModel job) => Jobs.Contains(job) && !_running.ContainsKey(job.Record.Id) && job.Record.State is not (JobState.Running or JobState.Paused);
+    private async Task DeleteSelectedAsync()
+    {
+        if (Selected is not { } job || !CanDelete(job)) return;
+        var index = Jobs.IndexOf(job);
+        Jobs.Remove(job);
+        Selected = Jobs.ElementAtOrDefault(Math.Min(index, Jobs.Count - 1));
+        try { await SaveAsync(); }
+        catch { Jobs.Insert(Math.Min(index, Jobs.Count), job); Selected = job; throw; }
+        _deleted.Push((job, index));
+        _services.Notice = "Session removed from history. Undo delete restores it while HashLynx remains open. Recovery files were kept.";
+        CommandManager.InvalidateRequerySuggested();
+    }
+    private async Task UndoDeleteAsync()
+    {
+        if (!_deleted.TryPop(out var deleted)) return;
+        Jobs.Insert(Math.Min(deleted.Index, Jobs.Count), deleted.Job);
+        Selected = deleted.Job;
+        try { await SaveAsync(); }
+        catch { Jobs.Remove(deleted.Job); Selected = Jobs.FirstOrDefault(); _deleted.Push(deleted); throw; }
+        _services.Notice = "Session restored to history.";
+        CommandManager.InvalidateRequerySuggested();
     }
     private void Tick()
     {
@@ -126,6 +160,7 @@ public sealed class JobsViewModel : ObservableObject
         finally
         {
             _running.Remove(job.Record.Id); job.Record.FinishedAt = DateTimeOffset.UtcNow; job.Refresh(); Raise(nameof(HasRunning)); CommandManager.InvalidateRequerySuggested();
+            if (job.HasRecovered) _services.Notice = "Passwords recovered. On Jobs, select the session and choose View recovered passwords.";
             try { await SaveAsync(); await _services.Log.WriteAsync("job.finished", "A local recovery session finished."); } catch (Exception exception) { _services.ReportError(exception); }
         }
     }

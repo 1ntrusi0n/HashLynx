@@ -14,6 +14,8 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ### Added
 
+- Jobs now provides **View recovered passwords**, which opens that session's hash/password table and reveals the results on request. Completed recoveries show a clear message, and selecting a session on Results loads it automatically.
+- Inactive sessions can be deleted from history, with Undo until the application closes. Recovery files are retained; running and paused sessions cannot be deleted.
 - Original, embedded Quick (64), Normal (512), Heavy (4,096), and Super (16,384) Dictionary rule presets, with deterministic regeneration and versioned profile identifiers.
 - An original 848-word starter list, automatic selection for new configurations, and direct access to an optional local full wordlist.
 - Clickable rule help with Hashcat syntax and before/after examples.

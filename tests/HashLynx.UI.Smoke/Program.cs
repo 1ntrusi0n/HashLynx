@@ -71,6 +71,7 @@ internal sealed class SmokeApplication(string output) : Application
             await CheckDefaultDeviceAsync(shell, store, window);
             await CheckManualCatalogAsync(shell, window, true);
             await CheckPopulatedJobsAsync(shell, window);
+            await CheckSessionHistoryAsync(shell, store, window);
 
             shell.Selected = shell.Navigation[0];
             for (var family = 0; family < 4; family++)
@@ -112,7 +113,7 @@ internal sealed class SmokeApplication(string output) : Application
             }
             listener.Flush();
             Require(errors.Length == 0, "WPF binding failures: " + errors);
-            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all six pages; four attack families; three target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; populated manual catalog expansion, selection and scrolling; populated running/failed Jobs with progress updates; saved Hardware default, Basic selection, Expert overrides, restart persistence; preflight error handling; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, and masked/revealed results passed." : "") + (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice) ? " Real recovery: Start → Jobs → Results recovered the known NTLM fixture in Basic mode with the starter list, Normal preset, and saved Hardware default." : ""));
+            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all six pages; four attack families; three target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; populated manual catalog expansion, selection and scrolling; populated running/failed Jobs with progress updates; inactive history deletion, Undo, file retention and save-failure rollback; saved Hardware default, Basic selection, Expert overrides, restart persistence; preflight error handling; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, automatic result loading, View recovered passwords navigation/reveal, and stale-result clearing passed." : "") + (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice) ? " Real recovery: Start → Jobs → Results recovered the known NTLM fixture in Basic mode with the starter list, Normal preset, and saved Hardware default." : ""));
             Console.WriteLine("WPF smoke passed. Screenshots and report: " + output);
             Shutdown(0);
         }
@@ -273,18 +274,64 @@ internal sealed class SmokeApplication(string output) : Application
         shell.Jobs.Jobs.Add(row);
         var results = (ResultsViewModel)shell.Navigation.Single(page => page.Page is ResultsViewModel).Page;
         results.SelectedJob = row;
-        await ((AsyncCommand)results.LoadCommand).ExecuteAsync(null);
+        await results.Loading;
         Require(results.Results.Count == 1, "The Results page must load a synthetic recovered result.");
         Require(results.Results[0].Plaintext != plaintext, "Plaintext must initially be hidden.");
-        results.Reveal = true;
-        Require(results.Results[0].Plaintext == plaintext, "Reveal must display the decoded plaintext.");
-        results.Reveal = false;
-        shell.Selected = shell.Navigation.Single(page => page.Page == results);
+        shell.Jobs.Selected = row;
+        shell.Selected = shell.Navigation.Single(page => page.Page == shell.Jobs);
+        await RenderAsync(window, "Recovered-session-actions");
+        var viewResults = Find<Button>(window, "ViewRecoveredPasswordsButton");
+        Require(viewResults.Command == shell.Jobs.ViewResultsCommand && viewResults.IsEnabled, "A completed job must offer the View recovered passwords action.");
+        await ((AsyncCommand)viewResults.Command!).ExecuteAsync(null);
+        Require(shell.Selected.Page == results && results.SelectedJob == row && results.Results.Single().Hash == digest && results.Results[0].Plaintext == plaintext, "View recovered passwords must navigate, load matching hashes, and reveal their passwords in one action.");
         await RenderAsync(window, "Connected-Results");
+        var sessionDisplay = Find<ContentPresenter>(Find<ComboBox>(window, "ResultsSessionPicker"), "");
+        Require(Find<TextBlock>(sessionDisplay, "").Text == row.Name, "The result session picker must display a session name.");
+        results.SelectedResult = results.Results.Single();
+        Require(results.CopyCommand.CanExecute(null), "A selected recovered password must be copyable.");
+        await ((AsyncCommand)shell.Jobs.DeleteCommand).ExecuteAsync(null);
+        Require(results.SelectedJob is null && results.Results.Count == 0 && !results.CopyCommand.CanExecute(null), "Deleting the displayed session must clear recovered rows and disable stale clipboard actions.");
+        await ((AsyncCommand)shell.Jobs.UndoDeleteCommand).ExecuteAsync(null);
+        results.SelectedJob = row;
+        var pending = results.Loading;
         results.SelectedJob = null;
-        Require(results.Results.Count == 0, "Switching jobs must clear previous results.");
+        await pending;
+        Require(results.Results.Count == 0 && !results.Reveal, "An in-flight load must not repopulate a cleared selection or preserve reveal state.");
         inspector.HashText = "changed target";
         Require(inspector.SelectedMode is null && inspector.PreparedTargetPath is null, "Editing a target must invalidate identification and prepared input.");
+    }
+
+    private async Task CheckSessionHistoryAsync(ShellViewModel shell, PersistenceStore store, Window window)
+    {
+        var outputFile = Path.Combine(store.Paths.Root, "retained-recovery.txt");
+        await File.WriteAllTextAsync(outputFile, "Synthetic retained recovery file");
+        var row = new JobViewModel(new JobRecord { Name = "History deletion fixture", State = JobState.Running, Configuration = new HashcatJob { Options = new CommonOptions { OutputPath = outputFile } } });
+        shell.Jobs.Jobs.Add(row); shell.Jobs.Selected = row;
+        Require(!shell.Jobs.DeleteCommand.CanExecute(null), "Running sessions must not be deletable.");
+        row.Record.State = JobState.Paused;
+        Require(!shell.Jobs.DeleteCommand.CanExecute(null), "Paused sessions must not be deletable.");
+        row.Record.State = JobState.Failed; row.Refresh();
+        shell.Selected = shell.Navigation.Single(page => page.Page == shell.Jobs);
+        await RenderAsync(window, "History-delete-controls");
+        Require(Find<Button>(window, "DeleteSessionButton").Command == shell.Jobs.DeleteCommand, "History must expose the delete command.");
+        await ((AsyncCommand)shell.Jobs.DeleteCommand).ExecuteAsync(null);
+        Require(!shell.Jobs.Jobs.Contains(row) && (await store.LoadJobsAsync()).All(job => job.Id != row.Record.Id), "Delete must persist removal from history.");
+        Require(File.Exists(outputFile) && shell.Jobs.Selected is null, "Deleting the last session must clear selection and preserve recovery files.");
+        await ((AsyncCommand)shell.Jobs.UndoDeleteCommand).ExecuteAsync(null);
+        Require(shell.Jobs.Selected == row && (await store.LoadJobsAsync()).Any(job => job.Id == row.Record.Id), "Undo must persist the restored session.");
+        var historyFile = Path.Combine(store.Paths.Root, "jobs.json");
+        var preservedHistory = Path.Combine(store.Paths.Root, "jobs-save-failure-fixture.json");
+        File.Move(historyFile, preservedHistory);
+        Directory.CreateDirectory(historyFile);
+        try
+        {
+            await ((AsyncCommand)shell.Jobs.DeleteCommand).ExecuteAsync(null);
+            Require(shell.Jobs.Jobs.Contains(row) && shell.Jobs.Selected == row && !shell.Jobs.UndoDeleteCommand.CanExecute(null), "A failed history write must restore the row and must not report a successful deletion.");
+        }
+        finally { Directory.Delete(historyFile); File.Move(preservedHistory, historyFile); }
+        Require((await store.LoadJobsAsync()).Any(job => job.Id == row.Record.Id), "The previous history must survive a failed deletion save.");
+        shell.Jobs.Jobs.Remove(row); shell.Jobs.Selected = null;
+        await shell.Jobs.SaveAsync();
     }
 
     private async Task CheckDefaultDeviceAsync(ShellViewModel shell, PersistenceStore store, Window window)
@@ -360,12 +407,10 @@ internal sealed class SmokeApplication(string output) : Application
             await RenderAsync(window, "Real-recovery-Job");
             var resultsPage = shell.Navigation.Single(page => page.Page is ResultsViewModel);
             var results = (ResultsViewModel)resultsPage.Page;
-            results.SelectedJob = job;
-            await ((AsyncCommand)results.LoadCommand).ExecuteAsync(null);
-            Require(results.Results.Count == 1 && results.Results[0].Plaintext != "password", "Actual recovered results must load masked by default.");
-            results.Reveal = true;
-            Require(results.Results[0].Plaintext == "password", "Actual recovery must return the expected fixture plaintext.");
+            await ((AsyncCommand)shell.Jobs.ViewResultsCommand).ExecuteAsync(null);
+            Require(shell.Selected.Page == results && results.Results.Count == 1 && results.Results[0].Plaintext == "password", "The completed job action must show the actual recovered fixture password.");
             results.Reveal = false;
+            Require(results.Results[0].Plaintext != "password", "The recovered password must be hideable again.");
             shell.Selected = resultsPage;
             await RenderAsync(window, "Real-recovery-Result");
         }
