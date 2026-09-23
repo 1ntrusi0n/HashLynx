@@ -1,5 +1,12 @@
 # Validation
 
+## Saved recovery device in Basic mode — 2026-09-23
+
+- The follow-up failed job had an empty device list and therefore used Hashcat's automatic selection, which still failed on the legacy GPU. The earlier working CPU choice existed only in a profile and was not applied to that job.
+- Hardware now saves a recovery default. WPF regressions verify the actual device button binding, persistence, immediate display updates, Basic mode ignoring hidden Expert IDs, explicit Expert overrides, blank Expert IDs inheriting the default, restart persistence, and clearing the preference.
+- A real WPF Start → Jobs → Results run in Basic mode passed on CPU device 3 with the starter list and Normal preset, without loading a profile or using Expert device settings. The known NTLM fixture was recovered and result masking verified.
+- Release build passed with zero warnings/errors; 166 standard tests passed (18 Core, 89 Hashcat, 42 Extractors, 17 Persistence), with three opt-in backend tests skipped in that run. The connected WPF smoke, including real CPU recovery, passed separately with zero binding errors.
+
 ## Immediate job failures and Jobs display — 2026-09-23
 
 - Direct synthetic recovery attempts reproduced the reported failure outside the GUI: default device selection returned `clGetDeviceInfo(): CL_INVALID_VALUE` and no usable devices; CPU-only selection additionally rejected Intel OpenCL runtime `5.2.0.10094`. Both exited with Hashcat error `-1` before recovery.

@@ -14,6 +14,7 @@ public sealed class PersistenceTests : IDisposable
         var store = CreateStore();
         var settings = await store.LoadSettingsAsync();
         Assert.Equal("Dark", settings.Theme);
+        Assert.Empty(settings.DefaultDeviceIds);
         Assert.Equal(store.Paths.ResultsDirectory, settings.DefaultOutputDirectory);
         Assert.False(File.Exists(Path.Combine(root, "settings.json")));
     }
@@ -24,15 +25,27 @@ public sealed class PersistenceTests : IDisposable
         var store = CreateStore();
         await store.SaveSettingsAsync(new AppSettings
         {
-            HashcatDirectory = "C:\\User tools\\hashcat", Theme = "Light", ExpertMode = true,
+            HashcatDirectory = "C:\\User tools\\hashcat", Theme = "Light", ExpertMode = true, DefaultDeviceIds = [3],
             ExtractorTools = new() { ["pdf"] = new() { ToolPath = "C:\\Tools\\décode\\pdf2john.py", InterpreterPath = "C:\\Python\\python.exe" } }
         });
         var settings = await CreateStore().LoadSettingsAsync();
         Assert.Equal("C:\\User tools\\hashcat", settings.HashcatDirectory);
         Assert.Equal("Light", settings.Theme);
         Assert.True(settings.ExpertMode);
+        Assert.Equal([3], settings.DefaultDeviceIds);
         Assert.EndsWith("pdf2john.py", settings.ExtractorTools["pdf"].ToolPath);
         Assert.Empty(Directory.GetFiles(root, "*.tmp"));
+    }
+
+    [Fact]
+    public async Task InvalidSavedDeviceIdsArePreservedAndReported()
+    {
+        var store = CreateStore();
+        var file = Path.Combine(root, "settings.json");
+        const string json = "{\"DefaultDeviceIds\":[-1]}";
+        await File.WriteAllTextAsync(file, json);
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.LoadSettingsAsync());
+        Assert.Equal(json, await File.ReadAllTextAsync(file));
     }
 
     [Fact]

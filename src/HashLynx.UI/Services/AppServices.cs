@@ -28,6 +28,21 @@ public sealed class AppServices : ObservableObject
     public string ErrorDetails { get => _errorDetails; private set => Set(ref _errorDetails, value); }
     public ExtractorRegistry Extractors { get; private set; } = ExtractorRegistry.CreateDefault(null);
     public event Action? BackendChanged;
+    public event Action? DefaultDevicesChanged;
+    public string DefaultDeviceSummary => Settings.DefaultDeviceIds.Count == 0
+        ? "Hashcat automatic selection"
+        : "Device " + string.Join(", ", Settings.DefaultDeviceIds);
+    public async Task SetDefaultDevicesAsync(IEnumerable<int> deviceIds)
+    {
+        var selected = deviceIds.Distinct().ToList();
+        if (selected.Any(id => id <= 0)) throw new InvalidOperationException("Choose a device reported in Hardware.");
+        var previous = Settings.DefaultDeviceIds;
+        Settings.DefaultDeviceIds = selected;
+        try { await Store.SaveSettingsAsync(Settings, LifetimeToken); }
+        catch { Settings.DefaultDeviceIds = previous; throw; }
+        DefaultDevicesChanged?.Invoke();
+        Notice = $"Recovery default saved: {DefaultDeviceSummary}. Applies to new attacks, including Basic mode.";
+    }
     public AppServices(PersistenceStore? store = null, HashcatFacade? backend = null)
     {
         Store = store ?? new PersistenceStore();
@@ -39,6 +54,7 @@ public sealed class AppServices : ObservableObject
     public async Task InitializeAsync()
     {
         Settings = await Store.LoadSettingsAsync();
+        DefaultDevicesChanged?.Invoke();
         ApplyTheme(Settings.Theme);
         var path = Backend.Discover(Settings.HashcatDirectory);
         if (path is not null) await ConnectAsync(path);

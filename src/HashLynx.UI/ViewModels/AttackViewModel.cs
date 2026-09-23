@@ -41,7 +41,7 @@ public sealed class AttackViewModel : ObservableObject
     public bool IsHybrid => Family == 2;
     public bool IsCombinator => Family == 3;
     public int HybridDirection { get => _hybridDirection; set => Set(ref _hybridDirection, value); }
-    public bool Expert { get => _expert; set { if (Set(ref _expert, value)) { RaiseRuleVisibility(); Raise(nameof(UsesSingleRules)); Raise(nameof(WordlistButtonLabel)); Raise(nameof(BasicMode)); if (!value) StartFeedback = "Basic mode uses the selected preset and managed run settings. Expert custom options apply only in Expert mode."; } } }
+    public bool Expert { get => _expert; set { if (Set(ref _expert, value)) { RaiseRuleVisibility(); Raise(nameof(UsesSingleRules)); Raise(nameof(WordlistButtonLabel)); Raise(nameof(BasicMode)); Raise(nameof(RecoveryDeviceSummary)); if (!value) StartFeedback = "Basic mode uses the selected preset and saved recovery device. Expert custom options apply only in Expert mode."; } } }
     public bool BasicMode => !Expert;
     public IReadOnlyList<RulePreset> RulePresets => _rulePresets.Presets;
     public RulePreset SelectedRulePreset { get => _selectedRulePreset; set { if (value is not null && Set(ref _selectedRulePreset, value)) { Raise(nameof(PresetSummary)); Raise(nameof(PresetEffort)); } } }
@@ -81,7 +81,11 @@ public sealed class AttackViewModel : ObservableObject
     public bool DisablePotfile { get; set; }
     public string PotfilePath { get; set; } = "";
     public string OutputPath { get; set; } = "";
-    public string Devices { get; set; } = "";
+    private string _devices = "";
+    public string Devices { get => _devices; set { if (Set(ref _devices, value)) Raise(nameof(RecoveryDeviceSummary)); } }
+    public string RecoveryDeviceSummary => Expert && !string.IsNullOrWhiteSpace(Devices)
+        ? $"Recovery device: {Devices} (Expert override)."
+        : $"Recovery device: {_services.DefaultDeviceSummary}. Change the default in Hardware.";
     public string Temperature { get; set; } = "";
     public string ExtraArguments { get; set; } = "";
     public int Workload { get; set; } = 2;
@@ -112,6 +116,7 @@ public sealed class AttackViewModel : ObservableObject
     public AttackViewModel(AppServices services, JobsViewModel jobs, Action showJobs)
     {
         _services = services; _jobs = jobs; _showJobs = showJobs; Inspector = new(services);
+        services.DefaultDevicesChanged += () => Raise(nameof(RecoveryDeviceSummary));
         _bundledWordlists = new BundledWordlists(services.Store.Paths);
         _rulePresets = new RulePresetCatalog(Path.Combine(services.Store.Paths.Root, "rule-presets"));
         _selectedRulePreset = _rulePresets.GetById(RulePresetCatalog.NormalId);
@@ -197,8 +202,9 @@ public sealed class AttackViewModel : ObservableObject
     private CommonOptions BuildCommonOptions(string directory, string session)
     {
         var devices = new List<int>();
-        if (Expert)
-            foreach (var token in Devices.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)) { if (!int.TryParse(token, out var id)) throw new InvalidOperationException("Device selection must contain comma-separated numeric IDs from Hardware."); devices.Add(id); }
+        if (Expert && !string.IsNullOrWhiteSpace(Devices))
+            foreach (var token in Devices.Split(',', StringSplitOptions.TrimEntries)) { if (!int.TryParse(token, out var id) || id <= 0) throw new InvalidOperationException("Device selection must contain comma-separated positive IDs from Hardware."); devices.Add(id); }
+        else devices.AddRange(_services.Settings.DefaultDeviceIds);
         int? temperature = null;
         if (Expert && !string.IsNullOrWhiteSpace(Temperature)) { if (!int.TryParse(Temperature, out var value)) throw new InvalidOperationException("Temperature threshold must be a number in degrees Celsius."); temperature = value; }
         var defaultOutput = Path.Combine(string.IsNullOrWhiteSpace(_services.Settings.DefaultOutputDirectory) ? directory : _services.Settings.DefaultOutputDirectory, $"{_draftId:N}.txt");

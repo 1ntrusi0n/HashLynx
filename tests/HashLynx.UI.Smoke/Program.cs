@@ -68,6 +68,7 @@ internal sealed class SmokeApplication(string output) : Application
             }
 
             await CheckSimpleWorkflowAsync(shell, store, window);
+            await CheckDefaultDeviceAsync(shell, store, window);
             await CheckManualCatalogAsync(shell, window, true);
             await CheckPopulatedJobsAsync(shell, window);
 
@@ -102,7 +103,7 @@ internal sealed class SmokeApplication(string output) : Application
             var backendPath = Environment.GetEnvironmentVariable("HASHLYNX_TEST_HASHCAT");
             if (File.Exists(backendPath)) await CheckConnectedWorkflowAsync(shell, services, window, backendPath);
             var recoveryDevice = Environment.GetEnvironmentVariable("HASHLYNX_TEST_DEVICE");
-            if (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice)) await CheckRecoveryWorkflowAsync(shell, window, recoveryDevice);
+            if (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice)) await CheckRecoveryWorkflowAsync(shell, services, window, recoveryDevice);
             foreach (var theme in new[] { "Light", "Dark", "System" })
             {
                 AppServices.ApplyTheme(theme);
@@ -111,7 +112,7 @@ internal sealed class SmokeApplication(string output) : Application
             }
             listener.Flush();
             Require(errors.Length == 0, "WPF binding failures: " + errors);
-            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all six pages; four attack families; three target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; populated manual catalog expansion, selection and scrolling; populated running/failed Jobs with progress updates; preflight error handling; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, and masked/revealed results passed." : "") + (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice) ? " Real recovery: Start → Jobs → Results recovered the known NTLM fixture with the starter list and Normal preset on the selected device." : ""));
+            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all six pages; four attack families; three target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; populated manual catalog expansion, selection and scrolling; populated running/failed Jobs with progress updates; saved Hardware default, Basic selection, Expert overrides, restart persistence; preflight error handling; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, and masked/revealed results passed." : "") + (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice) ? " Real recovery: Start → Jobs → Results recovered the known NTLM fixture in Basic mode with the starter list, Normal preset, and saved Hardware default." : ""));
             Console.WriteLine("WPF smoke passed. Screenshots and report: " + output);
             Shutdown(0);
         }
@@ -265,18 +266,62 @@ internal sealed class SmokeApplication(string output) : Application
         Require(inspector.SelectedMode is null && inspector.PreparedTargetPath is null, "Editing a target must invalidate identification and prepared input.");
     }
 
-    private async Task CheckRecoveryWorkflowAsync(ShellViewModel shell, Window window, string device)
+    private async Task CheckDefaultDeviceAsync(ShellViewModel shell, PersistenceStore store, Window window)
+    {
+        var hardwarePage = shell.Navigation.Single(page => page.Page is HardwareViewModel);
+        var hardware = (HardwareViewModel)hardwarePage.Page;
+        var fixture = new BackendDevice { Id = 3, Name = "Synthetic CPU", Type = "CPU", Driver = "Fixture runtime" };
+        hardware.Devices.Add(fixture);
+        shell.Selected = hardwarePage;
+        await RenderAsync(window, "Hardware-default-choice");
+        var choose = Find<Button>(window, "UseDefaultDeviceButton");
+        Require(choose.Command is not null && ReferenceEquals(choose.CommandParameter, fixture), "Hardware's default button must bind to its device.");
+        await ((AsyncCommand)choose.Command!).ExecuteAsync(choose.CommandParameter);
+        Require((await store.LoadSettingsAsync()).DefaultDeviceIds.SequenceEqual([3]), "Hardware choice must persist as an application default.");
+        await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        Require(Find<TextBlock>(window, "DefaultDeviceSummary").Text.Contains("Device 3", StringComparison.Ordinal), "Hardware must show the saved default immediately.");
+
+        var attack = shell.Attack;
+        shell.Selected = shell.Navigation[0];
+        foreach (var (expert, deviceText, expected) in new[] { (false, "invalid hidden override", 3), (true, "", 3), (true, "4", 4), (false, "4", 3) })
+        {
+            attack.Expert = expert; attack.Devices = deviceText;
+            attack.ProfileName = "Device default fixture";
+            await ((AsyncCommand)attack.SaveProfileCommand).ExecuteAsync(null);
+            var profile = attack.Profiles.Last();
+            Require(profile.Configuration.Options.Devices.SequenceEqual([expected]), "Basic must use the saved default; only visible Expert IDs may override it.");
+            attack.SelectedProfile = profile;
+            await ((AsyncCommand)attack.DeleteProfileCommand).ExecuteAsync(null);
+        }
+        await RenderAsync(window, "Basic-saved-device");
+        Require(Find<TextBlock>(window, "RecoveryDeviceSummary").Text.Contains("Device 3", StringComparison.Ordinal), "Basic mode must display its recovery device.");
+        var restarted = new AppServices(new PersistenceStore(store.Paths));
+        await restarted.InitializeAsync();
+        var reopened = new AttackViewModel(restarted, new JobsViewModel(restarted), () => { });
+        await reopened.InitializeAsync();
+        Require(!reopened.Expert && reopened.RecoveryDeviceSummary.Contains("Device 3", StringComparison.Ordinal), "The device default must survive restart without loading a profile or enabling Expert mode.");
+        await ((AsyncCommand)hardware.AutomaticCommand).ExecuteAsync(null);
+        Require((await store.LoadSettingsAsync()).DefaultDeviceIds.Count == 0 && attack.RecoveryDeviceSummary.Contains("automatic", StringComparison.Ordinal), "Clearing a default must persist and refresh Basic mode.");
+        hardware.Devices.Clear(); attack.Devices = ""; attack.SelectedProfile = null;
+    }
+
+    private async Task CheckRecoveryWorkflowAsync(ShellViewModel shell, AppServices services, Window window, string device)
     {
         var attack = shell.Attack;
         shell.Selected = shell.Navigation[0];
         attack.Family = 0;
-        attack.Expert = true;
+        var hardware = (HardwareViewModel)shell.Navigation.Single(page => page.Page is HardwareViewModel).Page;
+        await ((AsyncCommand)hardware.RefreshCommand).ExecuteAsync(null);
+        Require(int.TryParse(device, out var deviceId), "The Basic recovery smoke requires one current device ID.");
+        var selectedDevice = hardware.Devices.Single(entry => entry.Id == deviceId);
+        await ((AsyncCommand)hardware.UseDefaultCommand).ExecuteAsync(selectedDevice);
+        services.Settings.DefaultWorkloadProfile = 1;
+        attack.Expert = false;
         attack.UseCustomRules = false;
         attack.SelectedRulePreset = attack.RulePresets.Single(preset => preset.Id == RulePresetCatalog.NormalId);
         await ((AsyncCommand)attack.UseStarterCommand).ExecuteAsync(null);
-        attack.Devices = device;
-        attack.Workload = 1;
-        attack.ExtraArguments = "--runtime=20";
+        attack.Devices = "";
+        attack.ExtraArguments = "";
         attack.Inspector.InputMode = 0;
         // Public known-answer fixture: NTLM of the literal test word "password".
         attack.Inspector.HashText = "8846f7eaee8fb117ad06bdd830b7586c";
@@ -287,6 +332,7 @@ internal sealed class SmokeApplication(string output) : Application
         var job = shell.Jobs.Selected!;
         try
         {
+            Require(job.Record.Configuration.Options.Devices.SequenceEqual([deviceId]), "Basic Start must use the saved Hardware default without a profile.");
             using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
             while (job.Record.State is JobState.Ready or JobState.Running or JobState.Paused) await Task.Delay(100, timeout.Token);
             Require(job.Record.State == JobState.Cracked && job.Record.ExitCode == 0, "Known-answer recovery failed: " + job.Diagnostic);

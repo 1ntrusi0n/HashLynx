@@ -13,9 +13,11 @@ Use a compatible vendor runtime or another supported device. HashLynx does not i
 
 ## Selecting a CPU explicitly
 
-After installing a suitable CPU runtime, restart HashLynx, refresh **Hardware**, and note the newly reported CPU device ID. In **Attack → Expert mode → Run options → Advanced**, enter that ID in **Device IDs**. IDs can change when runtimes are added or removed.
+After installing a suitable CPU runtime, restart HashLynx, refresh **Hardware**, and choose **Use this device by default** on the newly reported CPU. This preference is saved for future launches and applies to Basic mode. The Attack page shows the selected device beside Start recovery. You do not need to load an attack profile or enable Expert mode.
 
-Hashcat has separate device-ID and OpenCL device-type filters. HashLynx now allows all OpenCL types when explicit IDs are supplied, then limits execution to exactly those IDs. This prevents an explicitly selected CPU from being excluded merely because a GPU is also present. With no IDs supplied, Hashcat's automatic defaults remain in effect.
+To override the saved choice for an individual attack, enter device IDs in **Attack → Expert mode → Run options → Advanced**. Blank Expert IDs use the saved Hardware default. Switching back to Basic mode restores that default. To return to Hashcat's automatic selection, choose **Use automatic selection** in Hardware. Refresh and reselect after runtime or hardware changes because IDs can change.
+
+Hashcat has separate device-ID and OpenCL device-type filters. HashLynx allows all OpenCL types when selected IDs are supplied, then limits execution to exactly those IDs. This prevents a selected CPU from being excluded merely because a GPU is also present. With neither a saved default nor Expert IDs, Hashcat's automatic selection remains in effect.
 
 ## Intel HD Graphics 4600 / i5-4460 investigation
 

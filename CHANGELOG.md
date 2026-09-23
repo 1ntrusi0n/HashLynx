@@ -6,6 +6,7 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ### Fixed
 
+- Recovery device choices can now be saved in Hardware and are honored in Basic mode and after restart. The Attack page shows the effective selection; explicit Expert IDs override the saved default. This avoids falling back to a failing automatic GPU choice when a working CPU was only saved in an attack profile.
 - Populated Jobs pages now bind progress and other display-only values one-way, avoiding read-only property exceptions during job selection and status updates.
 - Explicit backend device IDs now also allow all OpenCL device types, so selecting a CPU is honored even when a GPU is present. The selected IDs still restrict execution; automatic device selection is unchanged.
 - Backend failure messages distinguish invalid OpenCL queries, missing runtimes, unavailable devices, and rejected old runtimes while excluding private target and credential data.

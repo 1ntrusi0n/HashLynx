@@ -21,6 +21,9 @@ public sealed class PersistenceStore
         settings.DefaultWorkloadProfile = Math.Clamp(settings.DefaultWorkloadProfile, 1, 4);
         settings.StatusIntervalSeconds = Math.Clamp(settings.StatusIntervalSeconds, 1, 60);
         settings.ExtractorTools ??= new(StringComparer.OrdinalIgnoreCase);
+        settings.DefaultDeviceIds ??= [];
+        if (settings.DefaultDeviceIds.Any(id => id <= 0))
+            throw new InvalidDataException("Saved recovery device IDs must be positive. Settings were preserved; inspect your data directory.");
         return settings;
     }
 
