@@ -14,12 +14,23 @@ public sealed class BitLockerHashExtractor() : NativeArchiveExtractor(null)
     // Field layout: Hashcat bitlocker2hashcat.py and the libbde format specification.
     // Serialization: Hashcat mode 22100, type 1 (full AES-CCM authentication).
     // See THIRD_PARTY_NOTICES.md. No disk mounting or decryption is performed here.
-    protected override async Task<ExtractionResult> ExtractNativeAsync(FileStream stream, CancellationToken ct)
+    protected override Task<ExtractionResult> ExtractNativeAsync(FileStream stream, CancellationToken ct) => ExtractMetadataAsync(stream, ct);
+
+    /// <summary>Reads a seekable, partition-relative source supplied by the read-only drive broker.</summary>
+    public async Task<ExtractionResult> ExtractMetadataAsync(Stream stream, CancellationToken ct = default, int? deviceSectorSize = null)
     {
         var boot = await ReadAsync(stream, 0, 512, ct).ConfigureAwait(false);
         Require(FileTypeInspector.Identify(boot) == Id && U16(boot.AsSpan(510)) == 0xaa55,
             "The file is not a supported raw BitLocker partition image. Whole disks and virtual-disk containers must first be exported as a raw partition.");
         var sector = U16(boot.AsSpan(11));
+        // Some Windows-created removable volumes zero the legacy BPB field. For live devices,
+        // use the logical sector size obtained from Windows, never an inferred image-file default.
+        if (deviceSectorSize is not null)
+        {
+            Require(deviceSectorSize is 512 or 1024 or 2048 or 4096, "Windows reported an unsupported device sector size.");
+            Require(sector == 0 || sector == deviceSectorSize, "The BitLocker header and device sector sizes disagree.");
+            if (sector == 0) sector = (ushort)deviceSectorSize.Value;
+        }
         Require(sector is 512 or 1024 or 2048 or 4096, "The BitLocker sector size is unsupported.");
         var guidOffset = boot.AsSpan(3, 8).SequenceEqual("MSWIN4.1"u8) ? 0x1a8 : 0xa0;
         var guid = new Guid(boot.AsSpan(guidOffset, 16));

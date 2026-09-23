@@ -12,7 +12,7 @@ try {
     dotnet run --project tests/HashLynx.UI.Smoke -c Release --no-build -- artifacts/ui-smoke
     if ($LASTEXITCODE -ne 0) { throw 'WPF smoke checks failed.' }
     if ($Publish) {
-        dotnet publish src/HashLynx.UI -c Release -r win-x64 --self-contained false -o artifacts/publish/win-x64
+        dotnet publish src/HashLynx.UI -c Release -r win-x64 --self-contained false -o artifacts/publish/bitlocker-drive-test
         if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
     }
 }

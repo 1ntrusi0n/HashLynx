@@ -13,9 +13,19 @@
     <ProjectReference Include="../HashLynx.Hashcat/HashLynx.Hashcat.csproj" />
     <ProjectReference Include="../HashLynx.Extractors/HashLynx.Extractors.csproj" />
     <ProjectReference Include="../HashLynx.Persistence/HashLynx.Persistence.csproj" />
+    <ProjectReference Include="../HashLynx.Drives/HashLynx.Drives.csproj" />
+    <ProjectReference Include="../HashLynx.DriveReader/HashLynx.DriveReader.csproj" ReferenceOutputAssembly="false" />
     <Resource Include="../../assets/branding/logo.png" Link="Assets/logo.png" />
     <Resource Include="../../assets/branding/logo_withText.png" Link="Assets/logo_withText.png" />
     <None Include="../../THIRD_PARTY_NOTICES.md" Link="THIRD_PARTY_NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="../../LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+  <Target Name="CopyDriveReaderBuild" AfterTargets="Build">
+    <ItemGroup><DriveReaderFiles Include="../HashLynx.DriveReader/bin/$(Configuration)/$(TargetFramework)/$(RuntimeIdentifier)/*" Exclude="../HashLynx.DriveReader/bin/$(Configuration)/$(TargetFramework)/$(RuntimeIdentifier)/*.pdb" /></ItemGroup>
+    <Copy SourceFiles="@(DriveReaderFiles)" DestinationFolder="$(TargetDir)DriveReader" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyDriveReaderPublish" AfterTargets="Publish">
+    <ItemGroup><PublishedDriveReaderFiles Include="$(TargetDir)DriveReader/*" /></ItemGroup>
+    <Copy SourceFiles="@(PublishedDriveReaderFiles)" DestinationFolder="$(PublishDir)DriveReader" SkipUnchangedFiles="true" />
+  </Target>
 </Project>

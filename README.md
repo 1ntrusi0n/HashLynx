@@ -2,6 +2,11 @@
 
 # HashLynx
 
+
+> **Experimental branch: BitLocker drive reader.** This build adds **Attack > BitLocker Drive** for connected volumes. It runs alongside the stable app with a separate window title and data directory: `%LOCALAPPDATA%\HashLynx\Experiments\BitLockerDrive`. On first launch it copies only existing preferences, including the working Hashcat device choice. Sessions, targets and profiles are separate. This feature has not been merged into `main`.
+
+Select **Refresh drives**, choose the volume by letter/label/size, then **Extract and analyze (admin)**. Approve the UAC prompt for the bundled reader. Supported password records continue through normal Hashcat identification and recovery. The reader opens the physical device read-only, reads only metadata within the selected partition, and exits. No full image, Python, drive unlocking or protector changes are needed. The complete published folder, including `DriveReader/`, must stay together. See [drive-reader design and tests](docs/bitlocker-drive-test.md).
+
 A local Windows desktop workspace for **Hashcat**: inspect recovery targets, configure attacks, monitor jobs, and review results from one native WPF interface.
 
 **Status: 0.1.0 — early functional bootstrap.** HashLynx orchestrates the official Hashcat executable; it does not implement a cracking engine. It is intended for legitimate password recovery, authorized security auditing, research, labs, and CTFs.
@@ -74,7 +79,7 @@ Open the solution in Visual Studio or the repository folder in VS Code with C# s
 To publish a framework-dependent x64 application:
 
 ```powershell
-dotnet publish src/HashLynx.UI -c Release -r win-x64 --self-contained false -o artifacts/publish/win-x64
+dotnet publish src/HashLynx.UI -c Release -r win-x64 --self-contained false -o artifacts/publish/bitlocker-drive-test
 ```
 
 Or run `./scripts/build.ps1 -Publish`. Copy the publish directory as a unit. Obtain Hashcat separately and put its complete release alongside the application under `hashcat\`, or configure its existing location in Settings. Runtime dependencies are not silently installed.

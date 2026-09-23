@@ -62,7 +62,7 @@ internal static class ArchiveData
     public static uint U32(ReadOnlySpan<byte> value) => BinaryPrimitives.ReadUInt32LittleEndian(value);
     public static ulong U64(ReadOnlySpan<byte> value) => BinaryPrimitives.ReadUInt64LittleEndian(value);
     public static string Hex(ReadOnlySpan<byte> value) => Convert.ToHexStringLower(value);
-    public static async Task<byte[]> ReadAsync(FileStream stream, ulong offset, int size, CancellationToken ct)
+    public static async Task<byte[]> ReadAsync(Stream stream, ulong offset, int size, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         Require(size is >= 0 and <= 16 * 1024 * 1024 && offset <= (ulong)stream.Length && (ulong)size <= (ulong)stream.Length - offset);

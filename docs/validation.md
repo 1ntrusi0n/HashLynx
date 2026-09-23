@@ -1,5 +1,14 @@
 # Validation
 
+## Experimental direct BitLocker volume extraction - 2026-09-23
+
+- Work is isolated on `experiment/bitlocker-drive-reader`, with a separate test publish folder and experimental application data. The stable branch/build remains available.
+- The user explicitly designated a 16 GB removable volume with an ordinary password. The unelevated test client successfully launched the bundled UAC helper, verified its pipe PID, and read the selected physical partition through read-only handles. The live test extracted one password record using 4,096 metadata bytes, including the consistency reread; Hashcat v7.1.2 identified mode 22100. Temporary extracted data was deleted after the test. No unlock, write, protector change or password attack was performed.
+- Initial live testing exposed a zeroed legacy sector-size field. The parser now accepts authoritative Windows logical-sector geometry for live devices, rejects mismatches and preserves image-only validation. A synthetic regression covers that case. The helper's canonical volume-ID validation, alignment/partition/read-budget checks and framed IPC limits are unit tested.
+- Standard suite: 323 passed (183 Extractors/Drives, 93 Hashcat, 23 Core, 24 Persistence), with nine opt-in tests skipped. The live-device test passed separately. Release build and separate Windows publish passed with no warnings/errors.
+- Connected WPF smoke passed with zero binding errors: explicit drive selection, normal target creation, cached extraction, cancellation, stale-result rejection, unsupported protector feedback and removal handling, plus the existing recovery UI checks. Synthetic screenshots are under ignored `artifacts/ui-smoke-bitlocker-drive/`.
+- Recovery against the real device's known password has not yet been tested. See [test instructions and limitations](bitlocker-drive-test.md).
+
 ## Native PDF extraction - 2026-09-23
 
 - The original C# reader matched pdf2john output byte-for-byte for seven independently generated pikepdf documents: revision 2, revision 3, revision 4 RC4, revision 4 AES with unencrypted metadata, revision 5, revision 6 and a linearized revision-6 document. Stream/object-stream layouts were included. The reference ran with pyHanko in an isolated development environment; neither Python nor its packages is an application dependency.

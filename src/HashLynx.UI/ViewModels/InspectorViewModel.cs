@@ -1,4 +1,5 @@
 using HashLynx.Core;
+using HashLynx.Drives;
 using HashLynx.UI.Infrastructure;
 using HashLynx.UI.Services;
 using System.Collections.ObjectModel;
@@ -21,7 +22,17 @@ public sealed class InspectorViewModel : ObservableObject
     private string _extractionNotice = "";
     public string ExtractionNotice { get => _extractionNotice; private set => Set(ref _extractionNotice, value); }
     private IReadOnlyList<int> _extractionSuggestedModes = [];
-    public int InputMode { get => _inputMode; set { if (Set(ref _inputMode, value)) Invalidate(); } }
+    public int InputMode { get => _inputMode; set { if (Set(ref _inputMode, value)) { Invalidate(); Raise(nameof(AnalyzeButtonText)); } } }
+    public string AnalyzeButtonText => InputMode == 3 ? "Extract and analyze (admin)" : "Analyze target";
+    public ObservableCollection<DriveCandidate> Drives { get; } = [];
+    private DriveCandidate? _selectedDrive;
+    public DriveCandidate? SelectedDrive { get => _selectedDrive; set { if (Set(ref _selectedDrive, value)) { Invalidate(); DriveStatus = value is null ? "Select a connected volume." : "Ready to read the selected volume. Administrator permission will be requested."; } } }
+    private string _driveStatus = "Refresh the list, then select your BitLocker volume. Encryption status is checked when extracting.";
+    public string DriveStatus { get => _driveStatus; private set => Set(ref _driveStatus, value); }
+    private bool _readingDrive;
+    public bool ReadingDrive { get => _readingDrive; private set { if (Set(ref _readingDrive, value)) CommandManager.InvalidateRequerySuggested(); } }
+    public ICommand RefreshDrivesCommand { get; }
+    public ICommand CancelDriveCommand { get; }
     public string HashText { get => _hashText; set { if (Set(ref _hashText, value)) Invalidate(); } }
     public string TargetPath { get => _targetPath; set { if (Set(ref _targetPath, value)) Invalidate(); } }
     public string Summary { get => _summary; set => Set(ref _summary, value); }
@@ -45,9 +56,19 @@ public sealed class InspectorViewModel : ObservableObject
         _services = services;
         _targetCancellation = CancellationTokenSource.CreateLinkedTokenSource(services.LifetimeToken);
         BrowseCommand = new RelayCommand(_ => { if (services.Dialogs.OpenFiles(InputMode == 2 ? "Select an encrypted file or disk image" : "Select a hash file").FirstOrDefault() is { } path) TargetPath = path; });
-        DropCommand = new RelayCommand(files => { if (files is string[] { Length: > 0 } paths) { if (InputMode == 0) InputMode = 1; TargetPath = paths[0]; } });
+        DropCommand = new RelayCommand(files => { if (files is string[] { Length: > 0 } paths) { if (InputMode == 0) InputMode = 1; if (InputMode == 3) InputMode = 2; TargetPath = paths[0]; } });
         AnalyzeCommand = new AsyncCommand(_ => AnalyzeAsync(), services.ReportError);
         RefreshCatalogCommand = new AsyncCommand(_ => LoadCatalogAsync(), services.ReportError);
+        RefreshDrivesCommand = new AsyncCommand(_ => RefreshDrivesAsync(), services.ReportError, _ => !ReadingDrive);
+        CancelDriveCommand = new RelayCommand(_ => { Invalidate(); DriveStatus = "Drive read cancelled."; }, _ => ReadingDrive);
+    }
+    public async Task RefreshDrivesAsync()
+    {
+        var previous = SelectedDrive?.VolumeId;
+        var drives = await _services.BitLockerDrives.DiscoverAsync(_services.LifetimeToken);
+        SelectedDrive = null; Drives.Clear(); foreach (var drive in drives) Drives.Add(drive);
+        SelectedDrive = Drives.FirstOrDefault(drive => drive.VolumeId == previous);
+        DriveStatus = Drives.Count == 0 ? "No local drives are available. Connect the device and refresh." : "Select the correct volume by letter, label and size. BitLocker password support is checked when extracting.";
     }
     private void Invalidate() { _targetCancellation.Cancel(); _targetCancellation.Dispose(); _targetCancellation = CancellationTokenSource.CreateLinkedTokenSource(_services.LifetimeToken); _revision++; PreparedTargetPath = null; ExtractionNotice = ""; _extractionSuggestedModes = []; Matches.Clear(); SelectedMode = null; Summary = "Target changed. Analyze it or choose a hash mode explicitly."; Problems = ""; }
     private void VerifyRevision(long revision) { if (revision != _revision) throw new InvalidOperationException("The target changed while analysis was running. Analyze the current target again."); }
@@ -80,11 +101,34 @@ public sealed class InspectorViewModel : ObservableObject
             if (!File.Exists(target)) throw new InvalidOperationException("Choose an existing hash file.");
             prepared = target;
         }
+        else if (InputMode == 3)
+        {
+            var drive = SelectedDrive ?? throw new InvalidOperationException("Refresh the drive list and select your BitLocker volume.");
+            if (ReadingDrive) throw new InvalidOperationException("A drive read is already running. Wait or cancel it first.");
+            ReadingDrive = true;
+            DriveStatus = "Approve the Windows administrator prompt to read this volume's encryption metadata.";
+            try
+            {
+                var response = await _services.BitLockerDrives.ExtractAsync(drive, cancellationToken);
+                VerifyRevision(revision); cancellationToken.ThrowIfCancellationRequested();
+                var result = response.Extraction;
+                if (result is not { Success: true } || result.Hashes.Count == 0)
+                    throw new InvalidOperationException(response.Error ?? string.Join(Environment.NewLine, result?.Diagnostics ?? ["The drive reader returned no supported password records."]));
+                prepared = await _services.Store.Paths.CreateTargetAsync(string.Join(Environment.NewLine, result.Hashes) + Environment.NewLine, cancellationToken);
+                VerifyRevision(revision);
+                ExtractionNotice = string.Join(Environment.NewLine, result.Diagnostics);
+                _extractionSuggestedModes = result.SuggestedHashcatModes;
+                DriveStatus = $"Read {response.BytesRead:N0} bytes of metadata. Extracted {result.Hashes.Count} password record(s). The drive can remain connected or be removed safely through Windows.";
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            { if (revision == _revision) DriveStatus = ex.Message; throw; }
+            finally { ReadingDrive = false; }
+        }
         else
         {
             if (!File.Exists(target)) throw new InvalidOperationException("Choose an existing encrypted file.");
             var candidates = await _services.Extractors.FindCandidatesAsync(target, cancellationToken);
-            if (candidates.Count == 0) throw new InvalidOperationException("No registered extractor recognizes this file. See Extractors for supported formats.");
+            if (candidates.Count == 0) throw new InvalidOperationException("No built-in extractor recognizes this file. Choose a supported encrypted file or raw partition image.");
             var diagnostics = new List<string>();
             foreach (var extractor in candidates)
             {
