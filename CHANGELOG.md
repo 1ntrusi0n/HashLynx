@@ -21,6 +21,7 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ### Changed
 
+- New Dictionary attacks default to **No Rules**. The dropdown also offers Quick, Normal, Heavy, and Super; No Rules passes no rule file to Hashcat. Saved preset/custom-rule choices are preserved, and no-rule profiles load with No Rules selected.
 - Start recovery performs target identification and preflight automatically; ambiguous hashes still require an explicit mode choice.
 - Run options, custom rule files, separate Preflight, and command preview are Expert controls. Basic mode uses managed defaults and excludes hidden Expert settings from jobs.
 - Legacy profiles preserve their custom/no-rule behavior and reveal advanced settings in Expert mode. Edits during asynchronous launch checks require a fresh Start.

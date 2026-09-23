@@ -1,5 +1,11 @@
 # Validation
 
+## Optional rules and No Rules default — 2026-09-23
+
+- New Dictionary configurations select No Rules before Quick, Normal, Heavy, and Super. No Rules stores a null preset ID and an empty custom rule list; no backend preset assets or IDs changed.
+- Connected WPF smoke passed: default selection; No Rules profile save/load; preservation of an explicitly saved Heavy preset and legacy custom rules; no-rule legacy profiles; Hashcat command preview omits `--rules-file` for No Rules, includes the explicitly selected Normal preset, and removes it when switching back.
+- Release build passed with zero warnings/errors. All 166 standard tests passed; three opt-in backend tests were skipped in that run. The connected WPF smoke passed separately with zero binding errors.
+
 ## Saved recovery device in Basic mode — 2026-09-23
 
 - The follow-up failed job had an empty device list and therefore used Hashcat's automatic selection, which still failed on the legacy GPU. The earlier working CPU choice existed only in a profile and was not applied to that job.

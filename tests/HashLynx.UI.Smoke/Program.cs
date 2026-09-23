@@ -131,8 +131,8 @@ internal sealed class SmokeApplication(string output) : Application
         var attack = shell.Attack;
         shell.Selected = shell.Navigation[0];
         Require(!attack.Expert, "A new workspace must begin in Basic mode.");
-        Require(attack.RulePresets.Select(preset => preset.DisplayName).SequenceEqual(new[] { "Quick", "Normal", "Heavy", "Super" }), "The dropdown must offer exactly the four named presets.");
-        Require(attack.SelectedRulePreset.Id == RulePresetCatalog.NormalId, "Normal must be the default preset.");
+        Require(attack.RulePresets.Select(preset => preset.DisplayName).SequenceEqual(new[] { "No Rules", "Quick", "Normal", "Heavy", "Super" }), "The dropdown must offer No Rules followed by the four named presets.");
+        Require(attack.SelectedRulePreset.Id is null && attack.SelectedRulePreset.DisplayName == "No Rules", "No Rules must be the default selection.");
         Require(attack.Wordlists.Count == 1 && File.Exists(attack.Wordlists[0]), "A working bundled starter wordlist must be preselected.");
         Require((await File.ReadAllLinesAsync(attack.Wordlists[0])).Length == 848, "The app must ship the authored starter list.");
         await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
@@ -142,6 +142,8 @@ internal sealed class SmokeApplication(string output) : Application
         Require(!Find<FrameworkElement>(window, "CustomRulesPanel").IsVisible, "Basic mode must hide custom rule-file controls.");
         Require(Find<FrameworkElement>(window, "StartRecoveryButton").IsVisible, "Basic mode must retain Start recovery.");
         Require(Find<FrameworkElement>(window, "RulesPresetPicker").IsVisible, "Basic mode must show the preset dropdown.");
+        var selectionDisplay = Find<ContentPresenter>(Find<ComboBox>(window, "RulesPresetPicker"), "");
+        Require(Find<TextBlock>(selectionDisplay, "").Text == "No Rules", "The selected dropdown label must display No Rules, without model details.");
         var scroll = Find<ScrollViewer>(window, "AttackScrollViewer");
         scroll.ScrollToEnd();
         await RenderAsync(window, "Basic-dictionary-presets");
@@ -168,10 +170,22 @@ internal sealed class SmokeApplication(string output) : Application
         attack.ProfileName = "Basic preset regression";
         await ((AsyncCommand)attack.SaveProfileCommand).ExecuteAsync(null);
         var saved = (await store.LoadProfilesAsync()).Single().Configuration;
-        Require(saved.Attack.RulePresetId == RulePresetCatalog.NormalId && saved.Attack.RuleFiles.Count == 0, "Basic mode must save one built-in preset instead of hidden custom rule paths.");
+        Require(saved.Attack.RulePresetId is null && saved.Attack.RuleFiles.Count == 0, "Basic No Rules must save no preset and no hidden custom rule paths.");
         Require(saved.Attack.LeftRule is null && saved.Options.Devices.Count == 0 && saved.Options.TemperatureAbort is null, "Basic mode must use automatic controls.");
         Require(!saved.Options.OptimizedKernel && !saved.Options.DisablePotfile && saved.Options.ExtraArguments.Count == 0, "Hidden Expert options must not apply to Basic mode.");
         attack.SelectedProfile = attack.Profiles.Single();
+        attack.SelectedRulePreset = attack.RulePresets.Single(preset => preset.Id == RulePresetCatalog.NormalId);
+        await ((AsyncCommand)attack.LoadProfileCommand).ExecuteAsync(null);
+        Require(!attack.Expert && !attack.UseCustomRules && attack.SelectedRulePreset.Id is null, "Loading a No Rules profile must restore No Rules without requiring Expert mode.");
+        await ((AsyncCommand)attack.DeleteProfileCommand).ExecuteAsync(null);
+
+        attack.SelectedRulePreset = attack.RulePresets.Single(preset => preset.Id == RulePresetCatalog.HeavyId);
+        attack.ProfileName = "Explicit preset regression";
+        await ((AsyncCommand)attack.SaveProfileCommand).ExecuteAsync(null);
+        attack.SelectedProfile = attack.Profiles.Single();
+        attack.SelectedRulePreset = attack.RulePresets[0];
+        await ((AsyncCommand)attack.LoadProfileCommand).ExecuteAsync(null);
+        Require(attack.SelectedRulePreset.Id == RulePresetCatalog.HeavyId && !attack.UseCustomRules, "A saved explicit preset must retain its selection.");
         await ((AsyncCommand)attack.DeleteProfileCommand).ExecuteAsync(null);
 
         // A pre-preset dictionary profile must preserve its original custom-rule semantics.
@@ -198,7 +212,7 @@ internal sealed class SmokeApplication(string output) : Application
         await ((AsyncCommand)attack.DeleteProfileCommand).ExecuteAsync(null);
         attack.SelectedProfile = new AttackProfile { Name = "Legacy no-rule fixture", Configuration = new HashcatJob() };
         await ((AsyncCommand)attack.LoadProfileCommand).ExecuteAsync(null);
-        Require(attack.Expert && attack.UseCustomRules && attack.Rules.Count == 0, "Legacy no-rule dictionary profiles must not silently acquire a preset.");
+        Require(!attack.UseCustomRules && attack.SelectedRulePreset.Id is null && attack.Rules.Count == 0, "Legacy no-rule dictionary profiles must load as No Rules.");
         attack.SelectedProfile = null;
         attack.Expert = false;
         attack.UseCustomRules = false;
@@ -231,8 +245,15 @@ internal sealed class SmokeApplication(string output) : Application
         inspector.SelectedMatch = inspector.Matches.Single(mode => mode.Mode == 0);
         Require(inspector.SelectedMode?.Mode == 0, "Selecting an identification result must set the attack mode.");
         await ((AsyncCommand)shell.Attack.PreflightCommand).ExecuteAsync(null);
-        Require(shell.Attack.Preflight.StartsWith("Ready to start", StringComparison.Ordinal), "Basic dictionary preset must pass automatic validation: " + shell.Attack.Preflight);
+        Require(shell.Attack.Preflight.StartsWith("Ready to start", StringComparison.Ordinal), "Basic No Rules must pass automatic validation: " + shell.Attack.Preflight);
+        Require(!shell.Attack.Preview.Contains("--rules-file", StringComparison.Ordinal), "No Rules must omit rule-file arguments from the Hashcat command.");
+        shell.Attack.SelectedRulePreset = shell.Attack.RulePresets.Single(preset => preset.Id == RulePresetCatalog.NormalId);
+        await ((AsyncCommand)shell.Attack.PreflightCommand).ExecuteAsync(null);
+        Require(shell.Attack.Preflight.StartsWith("Ready to start", StringComparison.Ordinal), "An explicitly selected preset must pass validation.");
         Require(shell.Attack.Preview.Contains(RulePresetCatalog.NormalId + ".rule", StringComparison.Ordinal), "The built-in preset must be present in the executed command configuration.");
+        shell.Attack.SelectedRulePreset = shell.Attack.RulePresets[0];
+        await ((AsyncCommand)shell.Attack.PreflightCommand).ExecuteAsync(null);
+        Require(!shell.Attack.Preview.Contains("--rules-file", StringComparison.Ordinal), "Switching back to No Rules must remove the selected preset from the command.");
         shell.Selected = shell.Navigation[0];
         shell.Attack.Family = 1;
         shell.Attack.Mask = "?d?d?d?d";

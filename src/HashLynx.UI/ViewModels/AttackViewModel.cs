@@ -10,6 +10,11 @@ using System.Windows.Input;
 
 namespace HashLynx.UI.ViewModels;
 
+public sealed record RulePresetChoice(string? Id, string DisplayName, string Description, string Effort)
+{
+    public override string ToString() => DisplayName;
+}
+
 public sealed class AttackViewModel : ObservableObject
 {
     private readonly AppServices _services;
@@ -18,7 +23,7 @@ public sealed class AttackViewModel : ObservableObject
     private readonly BundledWordlists _bundledWordlists;
     private readonly RulePresetCatalog _rulePresets;
     private string? _starterWordlist, _localFullWordlist;
-    private RulePreset _selectedRulePreset;
+    private RulePresetChoice _selectedRulePreset;
     private bool _useCustomRules, _rulesHelpVisible;
     private Guid _draftId = Guid.NewGuid();
     private int _family, _hybridDirection;
@@ -43,15 +48,15 @@ public sealed class AttackViewModel : ObservableObject
     public int HybridDirection { get => _hybridDirection; set => Set(ref _hybridDirection, value); }
     public bool Expert { get => _expert; set { if (Set(ref _expert, value)) { RaiseRuleVisibility(); Raise(nameof(UsesSingleRules)); Raise(nameof(WordlistButtonLabel)); Raise(nameof(BasicMode)); Raise(nameof(RecoveryDeviceSummary)); if (!value) StartFeedback = "Basic mode uses the selected preset and saved recovery device. Expert custom options apply only in Expert mode."; } } }
     public bool BasicMode => !Expert;
-    public IReadOnlyList<RulePreset> RulePresets => _rulePresets.Presets;
-    public RulePreset SelectedRulePreset { get => _selectedRulePreset; set { if (value is not null && Set(ref _selectedRulePreset, value)) { Raise(nameof(PresetSummary)); Raise(nameof(PresetEffort)); } } }
+    public IReadOnlyList<RulePresetChoice> RulePresets { get; }
+    public RulePresetChoice SelectedRulePreset { get => _selectedRulePreset; set { if (value is not null && Set(ref _selectedRulePreset, value)) { Raise(nameof(PresetSummary)); Raise(nameof(PresetEffort)); } } }
     public bool UseCustomRules { get => _useCustomRules; set { if (Set(ref _useCustomRules, value)) RaiseRuleVisibility(); } }
     public bool ShowPresets => IsDictionary && !(Expert && UseCustomRules);
     public bool ShowCustomRuleChoice => IsDictionary && Expert;
     public bool ShowCustomRules => ShowCustomRuleChoice && UseCustomRules;
     public bool RulesHelpVisible { get => _rulesHelpVisible; set => Set(ref _rulesHelpVisible, value); }
     public string PresetSummary => SelectedRulePreset.Description;
-    public string PresetEffort => $"{SelectedRulePreset.CandidateCountLabel} · {SelectedRulePreset.Coverage}";
+    public string PresetEffort => SelectedRulePreset.Effort;
     public string StartFeedback { get => _startFeedback; set => Set(ref _startFeedback, value); }
     public string WordlistButtonLabel => Expert ? "Add wordlists…" : "Choose wordlist…";
     public bool HasLocalWordlist => _localFullWordlist is not null;
@@ -119,7 +124,9 @@ public sealed class AttackViewModel : ObservableObject
         services.DefaultDevicesChanged += () => Raise(nameof(RecoveryDeviceSummary));
         _bundledWordlists = new BundledWordlists(services.Store.Paths);
         _rulePresets = new RulePresetCatalog(Path.Combine(services.Store.Paths.Root, "rule-presets"));
-        _selectedRulePreset = _rulePresets.GetById(RulePresetCatalog.NormalId);
+        RulePresets = [new(null, "No Rules", "Try the words exactly as they appear in your wordlist.", "One candidate per input word, with no rule transformations."),
+            .. _rulePresets.Presets.Select(preset => new RulePresetChoice(preset.Id, preset.DisplayName, preset.Description, $"{preset.CandidateCountLabel} · {preset.Coverage}"))];
+        _selectedRulePreset = RulePresets[0];
         Wordlists.CollectionChanged += (_, _) => Raise(nameof(WordlistSummary));
         AddWordlistsCommand = new RelayCommand(_ => SelectWordlists(services.Dialogs.OpenFiles(Expert ? "Add wordlists" : "Choose a wordlist", Expert)));
         DropWordlistsCommand = new RelayCommand(files => { if (files is string[] paths) SelectWordlists(paths); });
@@ -276,8 +283,8 @@ public sealed class AttackViewModel : ObservableObject
         var preset = attack.RulePresetId is null ? null : _rulePresets.GetById(attack.RulePresetId);
         if (preset is not null && attack.RuleFiles.Count > 0) throw new InvalidOperationException("This profile mixes a rule preset with custom rule files. Its saved data has been preserved; use a profile with one rule source.");
         Family = attack.Kind switch { AttackFamilies.Mask => 1, AttackFamilies.HybridWordlistMask or AttackFamilies.HybridMaskWordlist => 2, AttackFamilies.Combinator => 3, _ => 0 };
-        UseCustomRules = IsDictionary && preset is null;
-        if (preset is not null) SelectedRulePreset = preset;
+        UseCustomRules = IsDictionary && attack.RuleFiles.Count > 0;
+        SelectedRulePreset = RulePresets.Single(choice => choice.Id == preset?.Id);
         HybridDirection = attack.Kind == AttackFamilies.HybridMaskWordlist ? 1 : 0;
         Wordlists.Clear(); foreach (var path in attack.Wordlists) Wordlists.Add(path); Rules.Clear(); foreach (var path in attack.RuleFiles) Rules.Add(path);
         LeftWordlist = attack.Wordlists.ElementAtOrDefault(0) ?? ""; RightWordlist = attack.Wordlists.ElementAtOrDefault(1) ?? "";

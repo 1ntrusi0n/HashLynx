@@ -1,6 +1,6 @@
 # Built-in dictionary rules
 
-HashLynx includes four original rule presets for Dictionary attacks. Normal is the default. The names describe increasing work per input word; they do not claim a measured recovery rate or guarantee success.
+HashLynx defaults Dictionary attacks to **No Rules**, which tries each word unchanged and passes no rule file to Hashcat. Four optional original rule presets are also available. The names describe increasing work per input word; they do not claim a measured recovery rate or guarantee success.
 
 | Preset ID | Display name | Unique rule lines | Coverage |
 | --- | --- | ---: | --- |
@@ -23,11 +23,11 @@ A rule is a short program applied to each input word. Multiple operations on one
 | `c$1$!` | Capitalize, append `1`, append `!` | `river` | `River1!` |
 | `sa@` | Replace `a` with `@` | `maple` | `m@ple` |
 
-HashLynx passes exactly one built-in rule file to Hashcat. Quick, Normal, Heavy, and Super are cumulative unions, so selecting a larger preset adds coverage without multiplying separate tiers together. In Expert mode, custom rule files replace the preset. Multiple custom `--rules-file` arguments use Hashcat's combination semantics: two files containing 100 and 200 rules can yield 20,000 combined transformations per word. An empty custom list runs the dictionary without rule transformations.
+When a preset is selected, HashLynx passes exactly one built-in rule file to Hashcat. Quick, Normal, Heavy, and Super are cumulative unions, so selecting a larger preset adds coverage without multiplying separate tiers together. In Expert mode, custom rule files replace the preset. Multiple custom `--rules-file` arguments use Hashcat's combination semantics: two files containing 100 and 200 rules can yield 20,000 combined transformations per word. An empty custom list runs the dictionary without rule transformations.
 
 ## Choosing an effort level
 
-Start with Normal or Quick, especially for a large list or a slow hash type. Heavy and Super make more sense with a focused list. The 848-word starter list produces up to 54,272, 434,176, 3,473,408, or 13,893,632 candidate applications across the four tiers. These figures do not predict runtime: hash type, hardware, rejected candidates, and duplicate outputs matter.
+Start with No Rules to try the original words. If you want variations, choose Normal or Quick, especially for a large list or a slow hash type. Heavy and Super make more sense with a focused list. The 848-word starter list produces up to 54,272, 434,176, 3,473,408, or 13,893,632 candidate applications across the four tiers. These figures do not predict runtime: hash type, hardware, rejected candidates, and duplicate outputs matter.
 
 No representative authorized recovery benchmark was supplied, so the presets have not been ranked by recovery effectiveness. Tests cover deterministic content, counts, command integration, and optional installed-Hashcat checks. Future effectiveness tuning should use a documented benchmark and new preset versions.
 
@@ -62,6 +62,6 @@ That check loads each preset through Hashcat's `--total-candidates` path and ver
 
 At use time, the app materializes versioned files in its per-user `rule-presets/` directory and restores missing or modified managed files from the embedded originals. The starter is similarly materialized under `wordlists/`. These operations never write to the supplied Hashcat release or original source collections.
 
-Profiles store `RulePresetId`, not a managed absolute rule path. Existing profiles without that field retain their custom `RuleFiles` behavior, including an empty no-rule list. The UI opens Expert mode for those dictionary profiles. Unknown preset IDs fail with an actionable message instead of silently substituting a different recipe. A saved preset and custom files together are rejected.
+Profiles store `RulePresetId`, not a managed absolute rule path. Existing profiles without that field retain their custom `RuleFiles` behavior, including an empty no-rule list. Profiles containing custom rule files open Expert mode; empty no-rule profiles select No Rules without requiring Expert mode. Unknown preset IDs fail with an actionable message instead of silently substituting a different recipe. A saved preset and custom files together are rejected.
 
 Treat published preset IDs as immutable. If coverage changes, add a new version and retain older embedded assets so saved jobs and profiles can resolve their original recipe.

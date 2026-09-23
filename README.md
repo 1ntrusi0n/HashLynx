@@ -82,7 +82,7 @@ Or run `./scripts/build.ps1 -Publish`. Copy the publish directory as a unit. Obt
 ## Recovery workflow
 
 1. Add a pasted hash, hash file, or encrypted file in Target Inspector.
-2. For a Dictionary attack, use the included starter wordlist or choose your own. Normal rules are selected by default.
+2. For a Dictionary attack, use the included starter wordlist or choose your own. **No Rules** is selected by default, so words are tried unchanged. Choose a preset if you want variations.
 3. Press **Start recovery**. HashLynx identifies the target when needed and checks the configuration automatically. If several hash modes match, choose the correct mode and press Start again.
 4. Monitor the job on Jobs and refresh its Results after recovery.
 
@@ -94,8 +94,9 @@ A wordlist supplies starting words; rules transform each word into password cand
 
 | Preset | Rules per word | Added coverage |
 | --- | ---: | --- |
+| No Rules (default) | 0 | Original words, without transformations |
 | Quick | 64 | Common case changes, short numbers, symbols, and substitutions |
-| Normal (default) | 512 | Two-digit endings, years, and simple prefixes |
+| Normal | 512 | Two-digit endings, years, and simple prefixes |
 | Heavy | 4,096 | Three-digit endings, more combinations, and selected position changes |
 | Super | 16,384 | Four-digit endings, broader prefixes, and paired substitutions |
 
@@ -107,7 +108,7 @@ The application never adds `--force`. Backend warnings and driver incompatibilit
 
 If jobs immediately fail with a compute-runtime or "no usable device" error, see [compute troubleshooting](docs/compute-troubleshooting.md). Installation validation and device enumeration do not prove that a device can run recovery kernels. In **Hardware**, refresh devices and choose **Use this device by default** on the CPU or GPU you want to use. The saved choice applies immediately to new Basic attacks and survives restart. The Attack page shows the effective selection. Explicit Expert device IDs override the saved default; leaving them blank uses it. **Use automatic selection** in Hardware clears the preference. Refresh and reselect after runtime or hardware changes because device IDs can change.
 
-With the verified Hashcat 7.1.2 mappings, rule files apply to Dictionary; Hybrid and Combinator expose inline left/right rules. Dictionary loopback requires a rule file or preset. Expert custom rule files replace the preset; selecting several custom files causes Hashcat to combine their transformations multiplicatively. To run an unmodified dictionary in Expert mode, select custom rules and leave the file list empty. Expert arguments use one separated argument per line, for example `--runtime=60`; the preview remains read-only.
+With the verified Hashcat 7.1.2 mappings, rule files apply to Dictionary; Hybrid and Combinator expose inline left/right rules. Dictionary loopback requires a rule file or preset. Expert custom rule files replace the preset; selecting several custom files causes Hashcat to combine their transformations multiplicatively. Choose **No Rules** in Basic or Expert mode to run an unmodified dictionary. Expert arguments use one separated argument per line, for example `--runtime=60`; the preview remains read-only.
 
 Pause/resume/checkpoint controls are disabled unless the backend's interactive transport is known to work. This Windows bootstrap does not claim verified console-key control through redirected pipes. **Stop** terminates the child process tree. Resume after exit is available only if Hashcat already wrote a usable restore file; stopping cannot guarantee a fresh checkpoint. Job history records completion, exhaustion, interruption, failure, and stop outcomes separately.
 
