@@ -1,6 +1,6 @@
 namespace HashLynx.Extractors;
 
-public sealed class PdfHashExtractor(ExtractorConfiguration? configuration = null, IExtractorProcessRunner? runner = null)
+internal sealed class ExternalPdfHashExtractor(ExtractorConfiguration? configuration = null, IExtractorProcessRunner? runner = null)
     : ExternalHashExtractor(configuration, runner, "pdf2john.exe", "pdf2john.py", "pdf2john.pl")
 {
     public override string Id => "pdf";

@@ -17,7 +17,7 @@ HashLynx is an independent GUI frontend. Hashcat is a separate third-party proje
 - Automatic validation when starting recovery, with run options, a copyable command preview, and a separate Preflight button in Expert mode. Commands execute with `ProcessStartInfo.ArgumentList`, never through a shell.
 - Asynchronous jobs, parsed JSON status metrics, stop, job history, interrupted-job detection, and restore when a saved Hashcat restore file exists.
 - Session-specific recovered results, an all-sessions view, plaintext hide/reveal, copy, and export. Hardware discovery and refresh use Hashcat's backend information.
-- An extensible extractor registry for PDF, ZIP, RAR, 7-Zip, and BitLocker. ZIP, RAR, 7-Zip and BitLocker are built in. The Extractors page only shows external tools that need configuration (currently PDF).
+- An extensible extractor registry for PDF, ZIP, RAR, 7-Zip, and BitLocker. All five formats are built in and need no extractor configuration.
 - Attack profile save/load/delete, per-user JSON persistence with atomic writes, sanitized structured diagnostics, and a Windows build/test workflow.
 
 ## Target Inspector
@@ -124,17 +124,19 @@ Pause/resume/checkpoint controls are disabled unless the backend's interactive t
 
 ## Extractors
 
-The Extractors page shows only formats that need an external tool (currently PDF). Built-in formats need no settings and are selected through Target Inspector. Legacy tool paths for built-in formats remain stored but no longer override native extraction.
+All supported formats are built in and selected through Target Inspector. The Extractors settings page is hidden when no external adapters need configuration. Legacy tool paths for built-in formats remain stored but no longer override native extraction.
 
 | Family | Adapter | Required separately |
 | --- | --- | --- |
-| PDF | External pdf2john | Compatible tool; Python or Perl if a script |
+| PDF | Built-in Standard password encryption (RC4/AES) | None |
 | ZIP | Built-in ZipCrypto and WinZip AES | None |
 | RAR | Built-in RAR3/RAR5 | None |
 | 7-Zip | Built-in AES with Copy/LZMA/LZMA2/Deflate | None |
 | BitLocker | Built-in user-password protector reader | None |
 
 Header inspection and extension checks guide selection. Adapter results normalize supported John output into hash strings and feed the normal identification workflow. Suggested modes are hints, not a replacement for Hashcat identification. External tool output formats may differ by release; unsupported or failed output is diagnosed rather than presented as successful extraction.
+
+PDF supports Standard Security Handler revisions 2 through 6: RC4-40, RC4-128, AES-128 and AES-256, targeting the document open password. It reads classic, stream and hybrid cross-references, including incremental updates, without Python or John. Documents up to 64 MiB are supported; certificate encryption, unusual key lengths and unsupported metadata encodings produce an explanation. See [PDF coverage and limits](docs/extractors.md#built-in-pdf-extraction).
 
 ZIP works immediately without configuration. It supports stored/deflated ZipCrypto, AES-128/192/256, ZIP64 and data descriptors. It selects the smallest supported encrypted member; recovery verifies that member, since other members may have different passwords. Full-data limits are 320 KiB per ZipCrypto member and less than 8 MiB of AES ciphertext. Target Inspector retains extraction notes and selects a uniquely suggested mode only after Hashcat confirms it.
 
@@ -171,7 +173,7 @@ These files are **not encrypted by HashLynx**. Result files and potfiles contain
 | `src/HashLynx.UI` | WPF views, view models, navigation, themes, dialogs, application composition |
 | `src/HashLynx.Core` | Domain/job/profile models, mask validation, streaming file inspection |
 | `src/HashLynx.Hashcat` | Discovery/capabilities, command construction, preflight, process execution, status/catalog/device/result parsers |
-| `src/HashLynx.Extractors` | `IHashExtractor`, registry, native ZIP/RAR/7z/BitLocker readers, header inspection, external adapters, dependency checks |
+| `src/HashLynx.Extractors` | `IHashExtractor`, registry, native PDF/ZIP/RAR/7z/BitLocker readers, header inspection, external adapters, dependency checks |
 | `src/HashLynx.Persistence` | Per-user paths, atomic JSON stores, structured logging |
 | `tests/` | xUnit unit tests, opt-in backend integration checks, WPF smoke harness |
 | `assets/branding` | PNG resources and multi-size ICO |
@@ -203,7 +205,7 @@ Status, ETA, temperatures, and device utilization are shown only when supplied b
 
 ## Screenshots
 
-Screenshot placeholder: capture the Attack, Jobs, and Extractors pages after configuring a local test installation. Use synthetic inputs and redact personal paths before adding screenshots to `docs/` or issues. The WPF smoke harness writes local screenshots under ignored `artifacts/` for review.
+Screenshot placeholder: capture the Attack, Jobs, and Results pages after configuring a local test installation. Use synthetic inputs and redact personal paths before adding screenshots to `docs/` or issues. The WPF smoke harness writes local screenshots under ignored `artifacts/` for review.
 
 ## License and contributions
 

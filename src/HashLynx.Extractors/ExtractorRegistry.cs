@@ -25,11 +25,10 @@ public sealed class ExtractorRegistry
     public static ExtractorRegistry CreateDefault(string? hashcatDirectory = null,
         IReadOnlyDictionary<string, ExtractorConfiguration>? configurations = null, IExtractorProcessRunner? runner = null)
     {
-        ExtractorConfiguration? Config(string id) => configurations?.TryGetValue(id, out var configuration) == true ? configuration : null;
         return new([
             // Built-in formats always use native readers. Preserve old configuration in storage,
             // but do not let an invisible legacy tool path override them.
-            new PdfHashExtractor(Config("pdf"), runner), new ZipHashExtractor(),
+            new PdfHashExtractor(), new ZipHashExtractor(),
             new RarHashExtractor(), new SevenZipHashExtractor(), new BitLockerHashExtractor()
         ]);
     }

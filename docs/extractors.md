@@ -6,7 +6,7 @@ HashLynx extracts password-verification material locally and passes it into the 
 
 | Adapter ID | Input | External dependency | Suggested Hashcat modes |
 | --- | --- | --- | --- |
-| `pdf` | PDF documents | `pdf2john.exe`, `.py`, or `.pl` | PDF revision-dependent modes |
+| `pdf` | PDF documents | None | 10400, 10500, 10600, 10700 |
 | `zip` | ZIP/ZIPX archives | None | 17200 (deflate), 17210 (stored), 13600 (WinZip AES) |
 | `rar` | RAR3/RAR5 archives | None | 12500, 13000, 23700, 23800 |
 | `7z` | 7-Zip archives | None | 11600 |
@@ -15,6 +15,16 @@ HashLynx extracts password-verification material locally and passes it into the 
 These are suggestions, not proof of a compatible mode. Hashcat remains the identification authority. John output is normalized by removing filename/login fields around the actual token. HashLynx preserves ZIP closing markers, deduplicates repeated tokens, and rejects RAR records that refer to external archive data instead of including it inline.
 
 No John the Ripper binaries or scripts are bundled. The native C# ZIP implementation uses the ZIP specifications and the hash serialization documented in the permissively licensed `zip2john.c`; see [third-party notices](../THIRD_PARTY_NOTICES.md). Obtain external tools separately from their official project and follow their licenses. HashLynx neither downloads dependencies nor changes their source files. BitLocker extraction is implemented in C# using the referenced format and Hashcat hash layout.
+
+## Built-in PDF extraction
+
+Choose **Encrypted file** in Target Inspector and select the PDF. No Python, Perl, John or PDF viewer is needed. The original C# reader extracts Standard Security Handler verification fields without rendering pages, executing PDF actions, decrypting content or changing the source file. Recovery targets the user/open password, not the separate owner password used for permission restrictions. A permissions-only PDF may already open with an empty user password.
+
+Supported combinations are revision 2 with a 40-bit RC4 key (mode 10400), revision 3 with 128-bit RC4 or revision 4 with 128-bit RC4/AES (10500), and revision 5/6 with AES-256 (10600/10700). Hashcat confirms the suggested mode before automatic selection. The output includes encryption version/revision, signed permissions, metadata-encryption flag, the first document identifier, U/O verification fields and, for AES-256, OE/UE encrypted keys.
+
+The reader follows the final `startxref` and active cross-reference chain, including incremental and hybrid updates. Newer entries take precedence over older ones, including freed objects; malformed latest metadata never silently falls back to an older encryption dictionary. Classic tables and uncompressed or Flate-compressed cross-reference streams with PNG predictors are supported. Strings support hexadecimal/literal forms, escapes and octal bytes. Linearized PDFs are covered by independent fixtures. Page content and compressed page-object streams need not be decoded to read encryption metadata.
+
+Limits: 64 MiB per document, 250,000 cross-reference entries across at most 64 sections, 8 MiB per encoded/decoded cross-reference stream, 32 syntax nesting levels and 16 metadata reference hops. Encryption fields must have the lengths expected by the chosen Hashcat mode. Certificates/custom security handlers, non-128-bit revision-3/4 keys, other cross-reference compression filters, compressed encryption-field objects, missing identifiers, damaged references and trailing non-whitespace after the final EOF marker are rejected with a diagnostic. Unsupported PDFs can be processed with a compatible external extractor separately and imported through **Hash File**.
 
 ## Built-in ZIP extraction
 
@@ -56,15 +66,9 @@ Windows Vista, other metadata versions, TPM-only and TPM+PIN protectors, startup
 
 ## Configuration and validation
 
-ZIP, RAR, 7-Zip and BitLocker are built in and have no configuration cards. Select them in Target Inspector. Legacy tool/interpreter paths for these formats are preserved in settings but ignored by the application registry, so hidden settings cannot unexpectedly launch an external tool. No downloads or process launches occur during native extraction.
+PDF, ZIP, RAR, 7-Zip and BitLocker are built in and have no configuration cards. Select them in Target Inspector. The Extractors navigation item is hidden while all registered formats are built in. Legacy tool/interpreter paths are preserved in settings but ignored by the application registry, so hidden settings cannot unexpectedly launch an external tool. No downloads or process launches occur during native extraction.
 
-Open **Extractors** and configure the tool path on the adapter's card. A tool can be a native `.exe`, Python `.py` script, or Perl `.pl` script. Script adapters also accept an interpreter executable path. HashLynx uses individual process arguments; do not enter a command line or append flags to a path. Batch files and shell executables are rejected.
-
-PDF searches PATH for its known tool names when no tool path is configured. Python discovery checks `py.exe`, `python.exe`, then `python3.exe`; the Windows launcher is invoked with `-3`. Perl discovery checks `perl.exe`. An explicitly configured missing PDF path is reported rather than silently replaced by another tool.
-
-For external adapters, **Available** means the executable was found, or a script and compatible runtime were found. It does not establish that every encrypted format or optional runtime module works. **Validate** runs the tool without a target to obtain usage output. Errors or timeouts are shown as unavailable. A representative encrypted sample is still required for a complete compatibility test.
-
-Tool paths are stored in `AppSettings.ExtractorTools` as `ExtractorToolSettings` values keyed by the adapter ID. Application composition maps those persisted values to the extractor library's `ExtractorConfiguration` records and rebuilds the registry after configuration changes. Availability checks use runtime version output when available; a displayed Python or Perl version describes the interpreter, not a separately verified extractor release.
+The library retains explicit external adapters for custom composition and tests. An external adapter may use a native executable, Python 3 script or Perl script and an optional interpreter path. Paths are separate arguments, never shell command lines. Availability means the dependency was found; validation checks usage output without a target. Neither proves compatibility with every input. This developer extension is separate from the application's built-in registry.
 
 ## File inspection and limits
 
@@ -112,3 +116,17 @@ dotnet test tests/HashLynx.Integration.Tests -c Release --filter FullyQualifiedN
 ```
 
 No test downloads dependencies, uses a live disk, or changes BitLocker settings.
+
+## PDF validation
+
+Normal tests include seven original one-page PDFs generated by pikepdf 10.13.0.post1, with revision 2/3/4 RC4, revision 4 AES with unencrypted metadata, revision 5/6 AES, compressed cross-reference streams and a linearized revision-6 document. The expected hashes were obtained independently from the referenced `pdf2john.py` with pyHanko 0.37.0. The known open password is `HashLynx-pdf-test`; a different owner password ensures recovery targets the open password. These are synthetic test data, never user documents or application assets.
+
+`scripts/generate-pdf-fixtures.py OUTPUT_DIRECTORY` regenerates samples using a separately installed test-only pikepdf. Encryption salts/IDs are random; regenerated files need fresh `.expected` outputs from the reference script. Ordinary tests use the checked-in fixtures and need no Python. Malformed-file tests additionally cover cyclic references, stale/freed incremental entries, hybrid precedence, all PNG row filters, bounded expansion, syntax escapes, truncations, mutations and cancellation.
+
+For actual Hashcat identification and known-password recovery across all seven fixtures, set `HASHLYNX_TEST_HASHCAT` to a disposable installation and `HASHLYNX_TEST_DEVICE` to a working device ID, then run:
+
+```powershell
+dotnet test tests/HashLynx.Integration.Tests -c Release --filter FullyQualifiedName~NativePdfFixtures
+```
+
+This also verifies session plaintext and that source PDFs remain unchanged. It requires no Python runtime. Python reference/generation tools are development tools only and are not distributed with the app.

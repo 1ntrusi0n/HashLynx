@@ -23,7 +23,9 @@ public sealed class ShellViewModel : ObservableObject
         Services = services;
         Jobs = new(services); Settings = new(services); Extractors = new(services);
         Attack = new(services, Jobs, () => Selected = Navigation!.First(item => item.Page == Jobs));
-        Navigation = [new("Attack", "\uE945", Attack), new("Jobs", "\uE9D9", Jobs), new("Results", "\uE8D7", new ResultsViewModel(services, Jobs)), new("Hardware", "\uE7F4", new HardwareViewModel(services)), new("Extractors", "\uE8B7", Extractors), new("Settings / About", "\uE713", Settings)];
+        Navigation = [new("Attack", "\uE945", Attack), new("Jobs", "\uE9D9", Jobs), new("Results", "\uE8D7", new ResultsViewModel(services, Jobs)), new("Hardware", "\uE7F4", new HardwareViewModel(services)), new("Settings / About", "\uE713", Settings)];
+        if (services.Extractors.All.Any(extractor => !extractor.IsBuiltIn))
+            Navigation.Insert(Navigation.Count - 1, new("Extractors", "\uE8B7", Extractors));
         Jobs.ResultsRequested += async job =>
         {
             var page = Navigation.Single(item => item.Page is ResultsViewModel);

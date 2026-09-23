@@ -31,6 +31,20 @@ public sealed class InstalledRarFactAttribute : FactAttribute
 
 public sealed class NativeArchiveRecoveryTests(ITestOutputHelper output)
 {
+    [InstalledPdfFact]
+    [Trait("Category", "Integration")]
+    public async Task NativePdfFixturesIdentifyRecoverAndReturnSessionPassword()
+    {
+        await WithBackendAsync(async (root, facade, installation, ct) =>
+        {
+            foreach (var name in new[] { "r2", "r3", "r4-rc4", "r4-aes", "r5", "r6", "r6-linearized" })
+            {
+                await RecoverAsync(new PdfHashExtractor(), Path.Combine(AppContext.BaseDirectory, "Fixtures", "Pdf", name + ".pdf"),
+                    "HashLynx-pdf-test", root, facade, installation, ct);
+                output.WriteLine($"Native PDF {name}: identified, recovered known open password and returned the session result.");
+            }
+        });
+    }
     [InstalledBitLockerFact]
     [Trait("Category", "Integration")]
     public async Task NativeBitLockerMatchesReferenceAndRecoversKnownPassword()
@@ -140,6 +154,16 @@ public sealed class NativeArchiveRecoveryTests(ITestOutputHelper output)
         var completed = await facade.StartJob(installation, job, cancellationToken: ct).Completion;
         Assert.True(completed.ExitCode == 0, $"Native {extractor.DisplayName} recovery (mode {mode}) exited with code {completed.ExitCode}.");
         Assert.Equal(password, Assert.Single(await facade.ReadSessionResultsAsync(job, ct)).Plaintext);
+    }
+}
+
+public sealed class InstalledPdfFactAttribute : FactAttribute
+{
+    public InstalledPdfFactAttribute()
+    {
+        if (!File.Exists(Environment.GetEnvironmentVariable("HASHLYNX_TEST_HASHCAT")) ||
+            !int.TryParse(Environment.GetEnvironmentVariable("HASHLYNX_TEST_DEVICE"), out _))
+            Skip = "Select HASHLYNX_TEST_HASHCAT and HASHLYNX_TEST_DEVICE for real PDF recovery.";
     }
 }
 

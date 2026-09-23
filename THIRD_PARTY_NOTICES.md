@@ -10,7 +10,20 @@ HashLynx is an independent application. Hashcat is a separate third-party projec
 
 John the Ripper and utilities such as pdf2john, zip2john, rar2john, and 7z2john are optional external programs. Some are GPL-licensed and may have additional component licenses. Obtain and review the license for the exact tool/version you use. HashLynx does not redistribute them or their source. Python and Perl runtimes also remain separately installed tools with their own licenses.
 
-HashLynx's MIT license does not relicense any external software. Process adapters and output parsers in this repository are HashLynx code. PDF extraction remains external; ZIP, RAR, 7-Zip and BitLocker have native implementations described below.
+HashLynx's MIT license does not relicense any external software. Process adapters and output parsers in this repository are HashLynx code. PDF, ZIP, RAR, 7-Zip and BitLocker have native implementations described below.
+
+## Native PDF extractor references
+
+The original C# PDF syntax and cross-reference reader uses the PDF Standard Security Handler field layout and the interoperable hash serialization in Openwall's [pdf2john.py](https://github.com/openwall/john/blob/bleeding-jumbo/run/pdf2john.py), consulted September 23, 2026. [QPDF's object-stream documentation](https://qpdf.readthedocs.io/en/stable/object-streams.html) and [encryption documentation](https://qpdf.readthedocs.io/en/stable/encryption.html) informed cross-reference handling. No QPDF, pyHanko or John parser code is copied or bundled. The individual reference script's permissive notice is retained here:
+
+```text
+This software is Copyright (c) 2023 Benjamin Dornel <benjamindornel@gmail.com>
+and it is hereby released to the general public under the following terms:
+Redistribution and use in source and binary forms, with or without
+modification, are permitted.
+```
+
+Hashcat's mode 10400/10500/10600/10700 parsers were consulted for field ordering, supported key lengths and size limits; its MIT notice is retained below. Original synthetic PDF fixtures were written using pikepdf and their expected hashes independently checked with pdf2john and pyHanko. These packages and the reference script are separately obtained development tools, not application dependencies or bundled code. Checked-in PDFs contain only an original blank page and known test credentials.
 
 ## Native ZIP extractor references
 

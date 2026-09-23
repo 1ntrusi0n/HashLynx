@@ -117,7 +117,7 @@ internal sealed class SmokeApplication(string output) : Application
             }
             listener.Flush();
             Require(errors.Length == 0, "WPF binding failures: " + errors);
-            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all six pages; four attack families; three target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; saved wordlist import, restart, selection, Combinator/Hybrid, deduplication, missing files, safe removal and failed/corrupt save handling; populated manual catalog expansion, selection and scrolling; populated running/failed Jobs with progress updates; inactive history deletion, Undo, file retention and save-failure rollback; saved Hardware default, Basic selection, Expert overrides, restart persistence; preflight error handling; native formats hidden from settings, legacy native overrides ignored, and PDF configuration; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, automatic result loading, View recovered passwords navigation/reveal, stale-result clearing, native ZIP/RAR/7z/BitLocker extraction, confirmed automatic mode selection, and persistent extraction notes passed." : "") + (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice) ? " Real recovery: Start → Jobs → Results recovered the known NTLM fixture in Basic mode with the starter list, Normal preset, and saved Hardware default." : ""));
+            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all navigation pages; four attack families; three target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; saved wordlist import, restart, selection, Combinator/Hybrid, deduplication, missing files, safe removal and failed/corrupt save handling; populated manual catalog expansion, selection and scrolling; populated running/failed Jobs with progress updates; inactive history deletion, Undo, file retention and save-failure rollback; saved Hardware default, Basic selection, Expert overrides, restart persistence; preflight error handling; native formats hidden from settings, legacy native overrides ignored, including PDF; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, automatic result loading, View recovered passwords navigation/reveal, stale-result clearing, native ZIP/RAR/7z/BitLocker/PDF extraction, confirmed automatic mode selection, and persistent extraction notes passed." : "") + (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice) ? " Real recovery: Start → Jobs → Results recovered the known NTLM fixture in Basic mode with the starter list, Normal preset, and saved Hardware default." : ""));
             Console.WriteLine("WPF smoke passed. Screenshots and report: " + output);
             Shutdown(0);
         }
@@ -218,24 +218,17 @@ internal sealed class SmokeApplication(string output) : Application
 
     private async Task CheckZipConfigurationAsync(ShellViewModel shell, Window window)
     {
-        var page = (ExtractorsViewModel)shell.Navigation.Single(item => item.Page is ExtractorsViewModel).Page;
-        shell.Selected = shell.Navigation.Single(item => item.Page == page);
-        await page.RefreshAsync();
-        foreach (var id in new[] { "zip", "rar", "7z", "bitlocker" })
-        {
+        var page = shell.Extractors;
+        Require(!shell.Navigation.Any(item => item.Page is ExtractorsViewModel), "No extractor settings page is needed when all formats are built in.");
+        foreach (var id in new[] { "zip", "rar", "7z", "bitlocker", "pdf" })
             shell.Services.Settings.ExtractorTools[id] = new ExtractorToolSettings { ToolPath = Path.Combine(output, "missing-legacy-" + id + ".exe") };
-        }
         await shell.Services.Store.SaveSettingsAsync(shell.Services.Settings);
         await page.RefreshAsync();
-        Require(page.Extractors.Count == 1 && page.Extractors.Single().Id == "pdf", "Built-in formats must not have configuration cards.");
-        foreach (var extractor in shell.Services.Extractors.All.Where(item => item.Id != "pdf"))
+        Require(page.Extractors.Count == 0, "Built-in formats must not have configuration cards.");
+        foreach (var extractor in shell.Services.Extractors.All)
             Require(extractor.IsBuiltIn && (await extractor.ValidateAsync()).IsAvailable, "Hidden legacy paths must not override built-in extraction.");
-        Require((await shell.Services.Store.LoadSettingsAsync()).ExtractorTools.ContainsKey("bitlocker"), "Legacy settings must be preserved on disk.");
-        var pdf = page.Extractors.Single();
-        pdf.ToolPath = Path.Combine(output, "missing-pdf2john.exe");
-        await ((AsyncCommand)pdf.SaveCommand).ExecuteAsync(null);
-        Require(pdf.Status == "Missing dependency", "External PDF configuration must remain usable.");
-        await RenderAsync(window, "External-extractors-only");
+        Require((await shell.Services.Store.LoadSettingsAsync()).ExtractorTools.ContainsKey("pdf"), "Legacy PDF settings must be preserved on disk.");
+        await RenderAsync(window, "Native-extractors-no-configuration");
     }
 
     private async Task CheckNativeZipInspectorAsync(ShellViewModel shell, AppServices services, Window window)
@@ -265,7 +258,8 @@ internal sealed class SmokeApplication(string output) : Application
         {
             ("7z", HashLynx.Extractors.Tests.NativeArchiveFixtures.Solid, 11600),
             ("rar", Convert.FromBase64String("UmFyIRoHAM+QcwAADQAAAAAAAABz53QEhCkAEAAAAA4AAAACSbCoRgAAAAAdMAEAIAAAAGHlSnNymIfLUzRiC8yoF2ZCohCxBRkBkh4EsHsAAAcA"), 23700),
-            ("raw", HashLynx.Extractors.Tests.BitLockerFixture.Image(toGo: true), 22100)
+            ("raw", HashLynx.Extractors.Tests.BitLockerFixture.Image(toGo: true), 22100),
+            ("pdf", await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "Pdf", "r6.pdf")), 10700)
         })
         {
             var archivePath = Path.Combine(services.Store.Paths.Root, "known-test-archive." + extension);

@@ -1,5 +1,14 @@
 # Validation
 
+## Native PDF extraction - 2026-09-23
+
+- The original C# reader matched pdf2john output byte-for-byte for seven independently generated pikepdf documents: revision 2, revision 3, revision 4 RC4, revision 4 AES with unencrypted metadata, revision 5, revision 6 and a linearized revision-6 document. Stream/object-stream layouts were included. The reference ran with pyHanko in an isolated development environment; neither Python nor its packages is an application dependency.
+- Twenty-nine new normal parser cases cover reference fixtures, escaped names/literal bytes, classic/stream/hybrid cross-references, all PNG row filters, active incremental updates, freed/null metadata, cyclic references, unsupported encryption, bounded decompression, size limits, truncations, mutations, cancellation and unchanged source bytes.
+- Real recovery passed for all seven PDFs on Hashcat v7.1.2 using the working Intel CPU device 3 in a disposable backend copy. Each case verified Hashcat identification, the known open password, session-specific plaintext and unchanged source PDFs. The fixtures have a distinct owner password; this validates open-password recovery.
+- Connected WPF smoke passed with zero binding errors, including native PDF extraction, Hashcat-confirmed automatic mode 10700 selection, visible extraction notes, no extractor settings navigation, ignored legacy tool paths and preserved saved settings. Existing archive, session and wordlist checks also passed. Screenshots are under ignored `artifacts/ui-smoke-pdf/`.
+- Release build passed with zero warnings/errors. Standard suite: 306 passed (166 Extractors, 93 Hashcat, 23 Core, 24 Persistence), with eight opt-in tests skipped. PDF recovery passed separately in approximately five minutes. The final settings-help text was included in a subsequent clean Release build and Windows publish.
+- This is bounded format support, not a complete PDF viewer/parser: documents above 64 MiB, custom/certificate encryption, uncommon key lengths and unsupported metadata encodings remain explicitly unsupported. See [coverage and limits](extractors.md#built-in-pdf-extraction).
+
 ## Session-specific and combined results — 2026-09-23
 
 - The previous Results view used Hashcat `--show` against the shared potfile, which returns known target matches rather than proving which session recovered them. Results now reads only each session's `--outfile` data; the explicit low-level potfile lookup remains separate from session display.

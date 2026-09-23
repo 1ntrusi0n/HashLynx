@@ -6,6 +6,7 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <None Include="../HashLynx.Extractors.Tests/Fixtures/Pdf/r6.pdf" Link="Fixtures/Pdf/r6.pdf" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="..\..\src\HashLynx.UI\HashLynx.UI.csproj" />
     <Compile Include="..\HashLynx.Extractors.Tests\NativeArchiveFixtures.cs" Link="Fixtures\NativeArchiveFixtures.cs" />
     <Compile Include="..\HashLynx.Extractors.Tests\BitLockerFixture.cs" Link="Fixtures\BitLockerFixture.cs" />

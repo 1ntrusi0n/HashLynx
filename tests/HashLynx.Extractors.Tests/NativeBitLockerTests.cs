@@ -28,14 +28,12 @@ public sealed class NativeBitLockerTests : IDisposable
     }
 
     [Fact]
-    public async Task RegistryIgnoresLegacyNativeOverridesButKeepsPdfConfigurable()
+    public async Task RegistryIgnoresLegacyOverridesForAllBuiltInFormats()
     {
         var configurations = new[] { "zip", "rar", "7z", "bitlocker", "pdf" }.ToDictionary(id => id, _ => new ExtractorConfiguration { ToolPath = Path.Combine(root, "missing.exe") });
         var registry = ExtractorRegistry.CreateDefault(root, configurations);
-        foreach (var extractor in registry.All.Where(item => item.Id != "pdf"))
+        foreach (var extractor in registry.All)
         { Assert.True(extractor.IsBuiltIn); Assert.True((await extractor.ValidateAsync()).IsAvailable); }
-        Assert.False(registry.GetById("pdf")!.IsBuiltIn);
-        Assert.False((await registry.GetById("pdf")!.GetAvailabilityAsync()).IsAvailable);
     }
 
     [Fact]
