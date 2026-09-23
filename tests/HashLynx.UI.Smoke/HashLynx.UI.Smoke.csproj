@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <UseWPF>true</UseWPF>
+    <StartupObject>HashLynx.UI.Smoke.Program</StartupObject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\HashLynx.UI\HashLynx.UI.csproj" />
+  </ItemGroup>
+</Project>

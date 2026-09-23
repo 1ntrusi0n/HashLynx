@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0-windows</TargetFramework><IsPackable>false</IsPackable><IsTestProject>true</IsTestProject><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5"><PrivateAssets>all</PrivateAssets></PackageReference>
+    <ProjectReference Include="../../src/HashLynx.Hashcat/HashLynx.Hashcat.csproj" />
+    <ProjectReference Include="../HashLynx.ProcessFixture/HashLynx.ProcessFixture.csproj" ReferenceOutputAssembly="false" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+  <Target Name="CopyProcessFixture" AfterTargets="Build">
+    <ItemGroup><ProcessFixtureFiles Include="../HashLynx.ProcessFixture/bin/$(Configuration)/net10.0-windows/HashLynx.ProcessFixture.*" /></ItemGroup>
+    <Copy SourceFiles="@(ProcessFixtureFiles)" DestinationFolder="$(OutDir)ProcessFixture" SkipUnchangedFiles="true" />
+  </Target>
+</Project>
