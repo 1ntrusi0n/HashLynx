@@ -124,5 +124,37 @@ public sealed class ParserTests
         var message = HashcatRunningJob.SanitizeDiagnostic("* Device #2: Outdated or broken Intel OpenCL runtime 5.2.0.10094 detected!");
         Assert.Contains("Install a supported driver/runtime", message);
         Assert.DoesNotContain("Device #2", message);
+        Assert.Contains("another supported device", message);
+        Assert.Contains("Refresh Hardware", message);
+    }
+
+    [Theory]
+    [InlineData("clGetDeviceInfo(): CL_INVALID_VALUE", "OpenCL could not query device information (CL_INVALID_VALUE). Check the device and driver in Hardware. Use a vendor-supported driver/runtime for this hardware, or another supported device.")]
+    [InlineData("clgetdeviceinfo(): cl_invalid_value", "OpenCL could not query device information (CL_INVALID_VALUE). Check the device and driver in Hardware. Use a vendor-supported driver/runtime for this hardware, or another supported device.")]
+    [InlineData("clCreateBuffer(): CL_INVALID_VALUE", "OpenCL rejected a backend request (CL_INVALID_VALUE). Check Hardware and the selected device IDs, then verify that the driver/runtime supports this device.")]
+    [InlineData("clGetPlatformIDs(): CL_PLATFORM_NOT_FOUND_KHR", "No compatible compute runtime was found. Install a vendor-supported GPU driver/runtime or a supported CPU OpenCL runtime, then refresh Hardware.")]
+    [InlineData("ATTENTION! No OpenCL, HIP or CUDA compatible platform found.", "No compatible compute runtime was found. Install a vendor-supported GPU driver/runtime or a supported CPU OpenCL runtime, then refresh Hardware.")]
+    [InlineData("You are probably missing the OpenCL, CUDA or HIP runtime installation.", "No compatible compute runtime was found. Install a vendor-supported GPU driver/runtime or a supported CPU OpenCL runtime, then refresh Hardware.")]
+    [InlineData("clGetDeviceIDs(): CL_DEVICE_NOT_FOUND", "The compute runtime found no supported device. Check the device selection in Hardware and whether the installed driver/runtime supports that hardware.")]
+    [InlineData("cuInit(): CUDA_ERROR_NO_DEVICE", "The compute runtime found no supported device. Check the device selection in Hardware and whether the installed driver/runtime supports that hardware.")]
+    [InlineData("hipInit(): hipErrorNoDevice", "The compute runtime found no supported device. Check the device selection in Hardware and whether the installed driver/runtime supports that hardware.")]
+    [InlineData("clCreateContext(): CL_DEVICE_NOT_AVAILABLE", "The selected OpenCL device is unavailable. Refresh Hardware, check its driver/runtime, or select another supported device.")]
+    [InlineData("clCreateContext(): CL_INVALID_DEVICE", "The selected OpenCL device is unavailable. Refresh Hardware, check its driver/runtime, or select another supported device.")]
+    [InlineData("No devices found/left.", "Hashcat has no usable compute device. Review the preceding driver/runtime error, then refresh Hardware or select another supported device.")]
+    public void BackendFailuresHaveSpecificFixedDiagnosticsWithoutEchoingPrivateData(string backendLine, string expected)
+    {
+        var line = backendLine + " synthetic-private-hash:synthetic-private-password C:\\private\\target.hashes";
+        Assert.Equal(expected, HashcatRunningJob.SanitizeDiagnostic(line));
+    }
+
+    [Theory]
+    [InlineData("clBuildProgram(): CL_BUILD_PROGRAM_FAILURE")]
+    [InlineData("CUDA runtime initialization failed")]
+    public void UnclassifiedComputeFailuresStillOfferHardwareAndDriverNextSteps(string line)
+    {
+        var result = HashcatRunningJob.SanitizeDiagnostic(line + " synthetic-private-value");
+        Assert.Contains("Check Hardware", result);
+        Assert.Contains("vendor driver/runtime", result);
+        Assert.DoesNotContain("synthetic-private", result);
     }
 }

@@ -105,6 +105,8 @@ The starter list is an original, small educational list embedded in the app (abo
 
 The application never adds `--force`. Backend warnings and driver incompatibilities must be resolved normally. Expert arguments are restricted to an explicit set of additional options; they cannot replace managed target/mode/session/output settings or enable network features.
 
+If jobs immediately fail with a compute-runtime or "no usable device" error, see [compute troubleshooting](docs/compute-troubleshooting.md). Installation validation and device enumeration do not prove that a device can run recovery kernels. To use a particular CPU or GPU, refresh Hardware and enter its current ID in Expert run options; explicit IDs also enable the matching OpenCL device types.
+
 With the verified Hashcat 7.1.2 mappings, rule files apply to Dictionary; Hybrid and Combinator expose inline left/right rules. Dictionary loopback requires a rule file or preset. Expert custom rule files replace the preset; selecting several custom files causes Hashcat to combine their transformations multiplicatively. To run an unmodified dictionary in Expert mode, select custom rules and leave the file list empty. Expert arguments use one separated argument per line, for example `--runtime=60`; the preview remains read-only.
 
 Pause/resume/checkpoint controls are disabled unless the backend's interactive transport is known to work. This Windows bootstrap does not claim verified console-key control through redirected pipes. **Stop** terminates the child process tree. Resume after exit is available only if Hashcat already wrote a usable restore file; stopping cannot guarantee a fresh checkpoint. Job history records completion, exhaustion, interruption, failure, and stop outcomes separately.
@@ -171,9 +173,11 @@ $env:HASHLYNX_TEST_HASHCAT = (Resolve-Path .\hashcat\hashcat.exe).Path
 dotnet test tests/HashLynx.Integration.Tests -c Release --filter Category=Integration
 ```
 
-This is an integration check, not a claim of recovery support on every driver. Initial local validation used Hashcat **v7.1.2**. The available Intel OpenCL driver was rejected by Hashcat, so successful GPU/CPU cracking and live interactive controls could not be validated on that machine. No warning-suppression flags were used. Real encrypted fixtures and a supported compute driver are still needed for a broader end-to-end matrix.
+This is an integration check, not a claim of recovery support on every driver. Local validation used Hashcat **v7.1.2**. Its initial Intel runtime failed; after an explicitly approved Intel CPU runtime 2026.0 installation, known-answer MD5 and NTLM CPU recovery passed, including the WPF Start → Jobs → Results flow. The legacy GPU and interactive controls remain unverified. No warning-suppression flags were used. Real encrypted fixtures and broader hardware coverage are still needed.
 
 Run `dotnet run --project tests/HashLynx.UI.Smoke -c Release -- artifacts/ui-smoke` for isolated missing-backend startup, all page/template loading, attack/input/theme layouts, Basic/Expert control visibility, bundled content, legacy/custom profiles, populated manual-catalog expansion/selection/scrolling, and WPF binding checks. With `HASHLYNX_TEST_HASHCAT` set, it also checks catalog search, automatic validation, and preset command generation. Screenshots and the pass/fail report stay under the ignored artifacts directory. CI also runs this harness.
+
+To additionally exercise a real, bounded NTLM recovery with the starter list and Normal preset, set `HASHLYNX_TEST_DEVICE` to a current device ID before running the connected WPF smoke test. This opt-in check uses a public known-answer fixture and isolated application data; it requires a working compute runtime.
 
 Status, ETA, temperatures, and device utilization are shown only when supplied by Hashcat. Candidate strings are deliberately omitted from persisted monitoring data to reduce secret duplication. Large result sets currently load into memory when refreshed; very large recovery outputs may need a future paged results viewer. File structural analysis is bounded and best-effort. The first release does not include installers, automatic updates, automatic dependency downloads, or new attack families beyond those listed above.
 

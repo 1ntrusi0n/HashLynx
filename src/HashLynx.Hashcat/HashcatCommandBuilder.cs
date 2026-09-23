@@ -58,7 +58,12 @@ public sealed class HashcatCommandBuilder
         if (installation.Capabilities.Status) args.Add("--status");
         if (installation.Capabilities.StatusJson) args.Add("--status-json");
         if (installation.Capabilities.Status) Option("--status-timer", job.Options.StatusIntervalSeconds);
-        if (job.Options.Devices.Count > 0) Option("--backend-devices", string.Join(',', job.Options.Devices));
+        if (job.Options.Devices.Count > 0)
+        {
+            Option("--backend-devices", string.Join(',', job.Options.Devices));
+            // Hashcat independently filters IDs and OpenCL device types. Explicit IDs should remain eligible even when they select a CPU.
+            Option("--opencl-device-types", "1,2,3");
+        }
         if (job.Options.OptimizedKernel) args.Add("--optimized-kernel-enable");
         if (job.Options.TemperatureAbort is { } temperature) Option("--hwmon-temp-abort", temperature);
         foreach (var rule in ResolveRuleFiles(job.Attack)) Option("--rules-file", FullPath(rule));

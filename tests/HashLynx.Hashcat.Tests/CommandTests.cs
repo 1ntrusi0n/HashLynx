@@ -53,6 +53,30 @@ public sealed class CommandTests : IDisposable
     }
 
     [Theory]
+    [InlineData("2")]
+    [InlineData("1")]
+    [InlineData("1,3")]
+    public void ExplicitDeviceIdsRemainEligibleRegardlessOfOpenClDeviceType(string deviceIds)
+    {
+        var job = Job();
+        job.Options.Devices = deviceIds.Split(',').Select(int.Parse).ToList();
+        var command = _builder.Build(_installation, job);
+        Assert.Equal(deviceIds, Value(command, "--backend-devices"));
+        Assert.Equal("1,2,3", Value(command, "--opencl-device-types"));
+        Assert.Single(command.Arguments, value => value == "--backend-devices");
+        Assert.Single(command.Arguments, value => value == "--opencl-device-types");
+        Assert.DoesNotContain("--force", command.Arguments);
+    }
+
+    [Fact]
+    public void AutomaticDeviceSelectionPreservesHashcatDefaults()
+    {
+        var command = _builder.Build(_installation, Job());
+        Assert.DoesNotContain("--backend-devices", command.Arguments);
+        Assert.DoesNotContain("--opencl-device-types", command.Arguments);
+    }
+
+    [Theory]
     [InlineData(AttackFamilies.Mask, "3")]
     [InlineData(AttackFamilies.HybridWordlistMask, "6")]
     [InlineData(AttackFamilies.HybridMaskWordlist, "7")]
@@ -107,6 +131,8 @@ public sealed class CommandTests : IDisposable
     [InlineData("--brain-client")]
     [InlineData("--outfile=private.txt")]
     [InlineData("--status-json=false")]
+    [InlineData("--opencl-device-types=1")]
+    [InlineData("-D1")]
     [InlineData("--")]
     public void ExpertArgumentsCannotOverrideManagedValuesOrChangeExecutionMode(string value)
     {

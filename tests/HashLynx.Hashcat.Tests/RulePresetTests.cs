@@ -118,7 +118,8 @@ public sealed class InstalledRulePresetFactAttribute : FactAttribute
 {
     public InstalledRulePresetFactAttribute(string environmentVariable = "HASHLYNX_TEST_HASHCAT")
     {
-        if (!File.Exists(Environment.GetEnvironmentVariable(environmentVariable))) Skip = $"Set {environmentVariable} to opt into this installed-Hashcat rule check.";
+        if (!File.Exists(Environment.GetEnvironmentVariable(environmentVariable)))
+            Skip = $"Set {environmentVariable} to opt into this installed-Hashcat rule check. Candidate-output checks may also set HASHLYNX_TEST_DEVICE to current backend device IDs.";
     }
 }
 
@@ -148,14 +149,28 @@ public sealed class RulePresetIntegrationTests
     {
         await WithBackendAsync("HASHLYNX_TEST_HASHCAT_CANDIDATES", async (facade, installation, wordlist, cancellationToken) =>
         {
+            var selectedDevices = Environment.GetEnvironmentVariable("HASHLYNX_TEST_DEVICE");
+            string? deviceIds = null;
+            if (!string.IsNullOrWhiteSpace(selectedDevices))
+            {
+                var parts = selectedDevices.Split(',', StringSplitOptions.TrimEntries);
+                Assert.All(parts, part => Assert.True(int.TryParse(part, out var id) && id > 0, "HASHLYNX_TEST_DEVICE must contain comma-separated positive backend device IDs."));
+                deviceIds = string.Join(',', parts);
+            }
             foreach (var preset in facade.RulePresets.Presets)
             {
-                var arguments = new[] { "--stdout", "--quiet", "--attack-mode", "0", "--rules-file", facade.RulePresets.GetRuleFilePath(preset.Id), "--", wordlist };
+                // Hashcat's stdout mode can emit no redirected stdout on Windows; its outfile
+                // transport exercises the same rule processing without relying on that handle.
+                var candidateFile = Path.Combine(Path.GetDirectoryName(wordlist)!, preset.Id + ".candidates.txt");
+                var arguments = new List<string> { "--stdout", "--quiet", "--attack-mode", "0", "--rules-file", facade.RulePresets.GetRuleFilePath(preset.Id), "--outfile", candidateFile };
+                if (deviceIds is not null) arguments.AddRange(["--backend-devices", deviceIds, "--opencl-device-types", "1,2,3"]);
+                arguments.AddRange(["--", wordlist]);
                 var capture = await new HashcatRunner().CaptureAsync(new(installation.ExecutablePath, installation.WorkingDirectory, arguments), cancellationToken);
                 Assert.Equal(0, capture.ExitCode);
                 Assert.DoesNotContain("invalid rule", capture.StandardError, StringComparison.OrdinalIgnoreCase);
                 Assert.DoesNotContain("unsupported rule", capture.StandardError, StringComparison.OrdinalIgnoreCase);
-                var candidates = capture.StandardOutput.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+                Assert.True(File.Exists(candidateFile), "Hashcat did not produce a candidate output file.");
+                var candidates = await File.ReadAllLinesAsync(candidateFile, cancellationToken);
                 Assert.Equal(preset.RuleCount, candidates.Length);
                 Assert.Contains("Password", candidates);
                 Assert.Contains("password", candidates);

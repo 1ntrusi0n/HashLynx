@@ -176,13 +176,28 @@ public sealed class HashcatRunningJob
 
     public static string SanitizeDiagnostic(string line)
     {
-        if (line.Contains("Outdated or broken", StringComparison.OrdinalIgnoreCase)) return "Hashcat rejected an outdated or broken compute runtime. Install a supported driver/runtime for the selected device.";
-        if (line.Contains("No devices", StringComparison.OrdinalIgnoreCase)) return "Hashcat could not find a usable backend device.";
+        if (line.Contains("Outdated or broken", StringComparison.OrdinalIgnoreCase)) return "Hashcat rejected an outdated or broken compute runtime. Install a supported driver/runtime for the selected device, or use another supported device. Refresh Hardware afterward.";
+        if (line.Contains("CL_INVALID_VALUE", StringComparison.OrdinalIgnoreCase))
+            return line.Contains("clGetDeviceInfo", StringComparison.OrdinalIgnoreCase)
+                ? "OpenCL could not query device information (CL_INVALID_VALUE). Check the device and driver in Hardware. Use a vendor-supported driver/runtime for this hardware, or another supported device."
+                : "OpenCL rejected a backend request (CL_INVALID_VALUE). Check Hardware and the selected device IDs, then verify that the driver/runtime supports this device.";
+        if (line.Contains("CL_PLATFORM_NOT_FOUND", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("No OpenCL, HIP or CUDA compatible platform found", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("missing the OpenCL, CUDA or HIP runtime", StringComparison.OrdinalIgnoreCase))
+            return "No compatible compute runtime was found. Install a vendor-supported GPU driver/runtime or a supported CPU OpenCL runtime, then refresh Hardware.";
+        if (line.Contains("CL_DEVICE_NOT_FOUND", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("CUDA_ERROR_NO_DEVICE", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("hipErrorNoDevice", StringComparison.OrdinalIgnoreCase))
+            return "The compute runtime found no supported device. Check the device selection in Hardware and whether the installed driver/runtime supports that hardware.";
+        if (line.Contains("CL_DEVICE_NOT_AVAILABLE", StringComparison.OrdinalIgnoreCase)
+            || line.Contains("CL_INVALID_DEVICE", StringComparison.OrdinalIgnoreCase))
+            return "The selected OpenCL device is unavailable. Refresh Hardware, check its driver/runtime, or select another supported device.";
+        if (line.Contains("No devices", StringComparison.OrdinalIgnoreCase)) return "Hashcat has no usable compute device. Review the preceding driver/runtime error, then refresh Hardware or select another supported device.";
         if (line.Contains("No hashes loaded", StringComparison.OrdinalIgnoreCase)) return "Hashcat did not load any hashes. Check the selected mode and target format.";
         if (line.Contains("Token length exception", StringComparison.OrdinalIgnoreCase)) return "A target line does not match the selected hash mode (token length).";
         if (line.Contains("Separator unmatched", StringComparison.OrdinalIgnoreCase)) return "A target line does not match the selected hash mode (separator).";
         if (line.Contains("Permission denied", StringComparison.OrdinalIgnoreCase)) return "Hashcat encountered a file permission error.";
-        if (line.Contains("CL_", StringComparison.Ordinal) || line.Contains("CUDA", StringComparison.OrdinalIgnoreCase)) return "The compute backend reported a driver or device error.";
+        if (line.Contains("CL_", StringComparison.OrdinalIgnoreCase) || line.Contains("CUDA", StringComparison.OrdinalIgnoreCase)) return "The compute backend reported a driver or device error. Check Hardware and the selected device IDs; verify that the vendor driver/runtime supports the device.";
         if (line.Contains("Insufficient", StringComparison.OrdinalIgnoreCase) && line.Contains("memory", StringComparison.OrdinalIgnoreCase)) return "The backend has insufficient available memory for this job.";
         return "Hashcat reported a diagnostic. Private target, path and plaintext data were excluded from the application log.";
     }

@@ -56,7 +56,7 @@ $env:HASHLYNX_TEST_HASHCAT = (Resolve-Path .\hashcat\hashcat.exe).Path
 dotnet test tests/HashLynx.Hashcat.Tests -c Release --filter Category=Integration
 ```
 
-That check loads each preset through Hashcat's `--total-candidates` path and verifies its budget without requiring a usable compute device. A separate, stricter check compares actual `--stdout` candidates; enable it by also setting `HASHLYNX_TEST_HASHCAT_CANDIDATES` to the executable path on a machine with a working compute runtime. Both checks prepare an isolated backend workspace and leave the original release untouched. The local Intel runtime blocked emitted-candidate verification; see [validation evidence](validation.md).
+That check loads each preset through Hashcat's `--total-candidates` path and verifies its budget without requiring a usable compute device. A separate, stricter check compares actual candidates using `--stdout --outfile`; enable it by also setting `HASHLYNX_TEST_HASHCAT_CANDIDATES` to the executable path on a machine with a working compute runtime. Set `HASHLYNX_TEST_DEVICE` to a device ID (or comma-separated IDs) when explicit selection is needed. Both checks prepare an isolated backend workspace and leave the original release untouched. All four emitted-candidate checks passed on the Intel CPU after its runtime update; see [validation evidence](validation.md).
 
 `RulePresetRecipes.cs` is the source of truth. Generation is deterministic and tests compare embedded assets with the recipe output. The four files total about 173 KB before assembly packaging. They are embedded in the Hashcat integration assembly; no separate source-rule checkout or asset download is required.
 

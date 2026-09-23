@@ -69,6 +69,7 @@ internal sealed class SmokeApplication(string output) : Application
 
             await CheckSimpleWorkflowAsync(shell, store, window);
             await CheckManualCatalogAsync(shell, window, true);
+            await CheckPopulatedJobsAsync(shell, window);
 
             shell.Selected = shell.Navigation[0];
             for (var family = 0; family < 4; family++)
@@ -100,6 +101,8 @@ internal sealed class SmokeApplication(string output) : Application
             Require(services.Notice.Contains("Hashcat", StringComparison.Ordinal), "Preflight without backend must explain configuration.");
             var backendPath = Environment.GetEnvironmentVariable("HASHLYNX_TEST_HASHCAT");
             if (File.Exists(backendPath)) await CheckConnectedWorkflowAsync(shell, services, window, backendPath);
+            var recoveryDevice = Environment.GetEnvironmentVariable("HASHLYNX_TEST_DEVICE");
+            if (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice)) await CheckRecoveryWorkflowAsync(shell, window, recoveryDevice);
             foreach (var theme in new[] { "Light", "Dark", "System" })
             {
                 AppServices.ApplyTheme(theme);
@@ -108,7 +111,7 @@ internal sealed class SmokeApplication(string output) : Application
             }
             listener.Flush();
             Require(errors.Length == 0, "WPF binding failures: " + errors);
-            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all six pages; four attack families; three target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; populated manual catalog expansion, selection and scrolling; preflight error handling; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, and masked/revealed results passed." : ""));
+            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all six pages; four attack families; three target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; populated manual catalog expansion, selection and scrolling; populated running/failed Jobs with progress updates; preflight error handling; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, and masked/revealed results passed." : "") + (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice) ? " Real recovery: Start → Jobs → Results recovered the known NTLM fixture with the starter list and Normal preset on the selected device." : ""));
             Console.WriteLine("WPF smoke passed. Screenshots and report: " + output);
             Shutdown(0);
         }
@@ -260,6 +263,76 @@ internal sealed class SmokeApplication(string output) : Application
         Require(results.Results.Count == 0, "Switching jobs must clear previous results.");
         inspector.HashText = "changed target";
         Require(inspector.SelectedMode is null && inspector.PreparedTargetPath is null, "Editing a target must invalidate identification and prepared input.");
+    }
+
+    private async Task CheckRecoveryWorkflowAsync(ShellViewModel shell, Window window, string device)
+    {
+        var attack = shell.Attack;
+        shell.Selected = shell.Navigation[0];
+        attack.Family = 0;
+        attack.Expert = true;
+        attack.UseCustomRules = false;
+        attack.SelectedRulePreset = attack.RulePresets.Single(preset => preset.Id == RulePresetCatalog.NormalId);
+        await ((AsyncCommand)attack.UseStarterCommand).ExecuteAsync(null);
+        attack.Devices = device;
+        attack.Workload = 1;
+        attack.ExtraArguments = "--runtime=20";
+        attack.Inspector.InputMode = 0;
+        // Public known-answer fixture: NTLM of the literal test word "password".
+        attack.Inspector.HashText = "8846f7eaee8fb117ad06bdd830b7586c";
+        attack.Inspector.SelectedMode = attack.Inspector.FindMode(1000);
+        var previousCount = shell.Jobs.Jobs.Count;
+        await ((AsyncCommand)attack.StartCommand).ExecuteAsync(null);
+        Require(shell.Jobs.Jobs.Count == previousCount + 1 && shell.Selected.Page == shell.Jobs, "Start recovery must create a job and show Jobs.");
+        var job = shell.Jobs.Selected!;
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            while (job.Record.State is JobState.Ready or JobState.Running or JobState.Paused) await Task.Delay(100, timeout.Token);
+            Require(job.Record.State == JobState.Cracked && job.Record.ExitCode == 0, "Known-answer recovery failed: " + job.Diagnostic);
+            await RenderAsync(window, "Real-recovery-Job");
+            var resultsPage = shell.Navigation.Single(page => page.Page is ResultsViewModel);
+            var results = (ResultsViewModel)resultsPage.Page;
+            results.SelectedJob = job;
+            await ((AsyncCommand)results.LoadCommand).ExecuteAsync(null);
+            Require(results.Results.Count == 1 && results.Results[0].Plaintext != "password", "Actual recovered results must load masked by default.");
+            results.Reveal = true;
+            Require(results.Results[0].Plaintext == "password", "Actual recovery must return the expected fixture plaintext.");
+            results.Reveal = false;
+            shell.Selected = resultsPage;
+            await RenderAsync(window, "Real-recovery-Result");
+        }
+        finally { await shell.Jobs.StopAllAsync(); }
+    }
+
+    private async Task CheckPopulatedJobsAsync(ShellViewModel shell, Window window)
+    {
+        var record = new JobRecord
+        {
+            Name = "Synthetic progress fixture", State = JobState.Running, StartedAt = DateTimeOffset.UtcNow.AddSeconds(-30),
+            LatestStatus = new JobStatusSnapshot { State = "Running", ProgressPercent = 25, SpeedHashesPerSecond = 1234, TotalHashes = 1 }
+        };
+        var row = new JobViewModel(record);
+        shell.Jobs.Jobs.Add(row);
+        shell.Jobs.Selected = row;
+        shell.Selected = shell.Navigation.Single(page => page.Page == shell.Jobs);
+        await RenderAsync(window, "Jobs-running");
+        var progress = Find<ProgressBar>(window, "JobProgressBar");
+        Require(progress.Value == 25, "A populated Jobs page must display the selected job's progress.");
+        record.LatestStatus.ProgressPercent = 75;
+        row.Refresh();
+        await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        Require(progress.Value == 75, "The progress display must update when a job status changes.");
+        record.State = JobState.Failed;
+        record.LatestStatus = null;
+        record.ExitCode = -1;
+        record.Diagnostic = HashcatRunningJob.SanitizeDiagnostic("clGetDeviceInfo(): CL_INVALID_VALUE");
+        row.Refresh();
+        await RenderAsync(window, "Jobs-failed");
+        Require(progress.Value == 0 && row.Diagnostic.Contains("CL_INVALID_VALUE", StringComparison.Ordinal), "Failed jobs must render their actionable backend diagnostic without binding exceptions.");
+        shell.Jobs.Selected = null;
+        shell.Jobs.Jobs.Remove(row);
+        shell.Selected = shell.Navigation[0];
     }
 
     private async Task RenderAsync(Window window, string name)

@@ -1,5 +1,15 @@
 # Validation
 
+## Immediate job failures and Jobs display — 2026-09-23
+
+- Direct synthetic recovery attempts reproduced the reported failure outside the GUI: default device selection returned `clGetDeviceInfo(): CL_INVALID_VALUE` and no usable devices; CPU-only selection additionally rejected Intel OpenCL runtime `5.2.0.10094`. Both exited with Hashcat error `-1` before recovery.
+- The separate Jobs UI exception was fixed by making progress/display bindings explicitly one-way. A new populated-Jobs smoke test verifies progress at 25%, updates to 75%, then renders a failed job and its specific backend diagnostic with zero binding errors.
+- Explicit device-ID commands now enable OpenCL types `1,2,3` while retaining the exact requested IDs. Command tests cover CPU/GPU-style IDs, multiple IDs, unchanged automatic defaults, and rejected overrides.
+- Normal suite: 165 passed (18 Core, 89 Hashcat, 42 Extractors, 16 Persistence); three opt-in backend tests skipped. Release build completed with zero warnings/errors. Driver diagnostic tests also verify that private input appended to backend messages is never echoed.
+- With explicit user approval, Intel CPU OpenCL runtime 2026.0 was downloaded from Intel, verified with valid Intel Authenticode signatures on both EXE and MSI, and installed successfully (exit 0, no restart requested). Hashcat reports the new CPU as device 3 with runtime `2026.21.3.0.31_160000`; the legacy GPU still reports its original error.
+- A direct known-answer MD5 recovery succeeded on the new CPU. An opt-in WPF run then recovered the known NTLM fixture through Start → Jobs → Results using the 848-word starter and Normal preset. Exit code, recovered plaintext, default result masking, and the populated Jobs page were verified. This validates CPU recovery on this machine, not the legacy GPU or interactive pause/checkpoint controls. See [compute troubleshooting](compute-troubleshooting.md).
+- The strict installed-Hashcat candidate test also passed on CPU device 3: Quick, Normal, Heavy, and Super emitted exactly 64, 512, 4,096, and 16,384 candidates for the fixture. Representative case, substitution, numeric, insertion, deletion, prefix, and suffix transformations were verified. The harness uses `--stdout --outfile` because redirected stdout alone produced no candidate output on this host. This confirms rule behavior, not comparative recovery effectiveness.
+
 ## Manual catalog layout fix — 2026-09-23
 
 - Reproduced the reported frozen page by expanding a catalog with 600 synthetic modes: WPF threw a `XamlParseException` because `Run.Text` defaulted to a two-way binding against the read-only `HashMode.DisplayName` property.
@@ -16,7 +26,7 @@
 - Connected WPF smoke passed: Start identifies an ambiguous synthetic target and blocks launch until a mode is selected; Dictionary preflight includes the preset; Mask preflight and masked/revealed synthetic results still work. Help text was reviewed at normal and narrow widths and now wraps correctly.
 - Framework-dependent `win-x64` publish succeeded. The four rule assets total 172,617 bytes and the 848-word starter is 5,877 bytes, embedded in the app assemblies. Large local source collections and third-party binaries are excluded.
 
-Actual `--stdout` candidate verification was attempted but the local Intel runtime reported `CL_INVALID_VALUE` and produced no candidates. The strict output test remains available through `HASHLYNX_TEST_HASHCAT_CANDIDATES` on a working compute runtime; it was not counted as a pass. No recovery-effectiveness benchmark or successful cracking result is claimed for these presets. Original Hashcat and source-corpus files were not changed.
+At this stage, actual `--stdout` candidate verification was blocked by the old Intel runtime and was not counted as a pass. The later CPU runtime installation enabled both strict candidate validation and synthetic recovery, documented above. No comparative recovery-effectiveness benchmark was performed. Original Hashcat and source-corpus files were not changed.
 
 ## Bootstrap — 2026-09-23
 
