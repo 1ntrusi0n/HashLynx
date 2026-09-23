@@ -8,9 +8,11 @@ public sealed class HashcatCommandBuilder
 {
     private readonly string _stateDirectory;
     private readonly Dictionary<string, Func<AttackConfiguration, IReadOnlyList<string>>> _attackAdapters;
-    public HashcatCommandBuilder(string? stateDirectory = null, IEnumerable<AttackArgumentAdapter>? additionalAttacks = null)
+    public RulePresetCatalog RulePresets { get; }
+    public HashcatCommandBuilder(string? stateDirectory = null, IEnumerable<AttackArgumentAdapter>? additionalAttacks = null, RulePresetCatalog? rulePresets = null)
     {
         _stateDirectory = stateDirectory ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HashLynx", "jobs");
+        RulePresets = rulePresets ?? new(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(_stateDirectory))!, "rule-presets"));
         _attackAdapters = new()
         {
             [AttackFamilies.Dictionary] = attack => attack.Wordlists.Select(FullPath).ToArray(),
@@ -27,6 +29,14 @@ public sealed class HashcatCommandBuilder
     public string GetPotfilePath(HashcatJob job) => FullPath(job.Options.PotfilePath ?? Path.Combine(_stateDirectory, "hashlynx.potfile"));
     public string GetOutputPath(HashcatJob job) => FullPath(job.Options.OutputPath ?? Path.Combine(GetJobDirectory(job), "recovered.txt"));
     public string GetJobDirectory(HashcatJob job) => Path.Combine(_stateDirectory, job.Id.ToString("N"));
+
+    public IReadOnlyList<string> ResolveRuleFiles(AttackConfiguration attack)
+    {
+        if (attack.RulePresetId is null) return attack.RuleFiles;
+        if (attack.Kind != AttackFamilies.Dictionary) throw new ArgumentException("Built-in rule presets are available for dictionary attacks.");
+        if (attack.RuleFiles.Count > 0) throw new ArgumentException("Choose a built-in preset or custom rule files. Combining them multiplies rule applications.");
+        return [RulePresets.GetRuleFilePath(attack.RulePresetId)];
+    }
 
     public HashcatCommand Build(HashcatInstallation installation, HashcatJob job)
     {
@@ -51,7 +61,7 @@ public sealed class HashcatCommandBuilder
         if (job.Options.Devices.Count > 0) Option("--backend-devices", string.Join(',', job.Options.Devices));
         if (job.Options.OptimizedKernel) args.Add("--optimized-kernel-enable");
         if (job.Options.TemperatureAbort is { } temperature) Option("--hwmon-temp-abort", temperature);
-        foreach (var rule in job.Attack.RuleFiles) Option("--rules-file", FullPath(rule));
+        foreach (var rule in ResolveRuleFiles(job.Attack)) Option("--rules-file", FullPath(rule));
         if (!string.IsNullOrEmpty(job.Attack.LeftRule)) Option("--rule-left", job.Attack.LeftRule);
         if (!string.IsNullOrEmpty(job.Attack.RightRule)) Option("--rule-right", job.Attack.RightRule);
         foreach (var charset in job.Attack.CustomCharsets.OrderBy(c => c.Key)) Option($"--custom-charset{charset.Key}", charset.Value);

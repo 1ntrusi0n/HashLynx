@@ -15,6 +15,8 @@ public sealed class AttackConfiguration
     public string Kind { get; set; } = AttackFamilies.Dictionary;
     public List<string> Wordlists { get; set; } = [];
     public List<string> RuleFiles { get; set; } = [];
+    /// <summary>A stable built-in rule recipe ID. Null preserves legacy custom-file or no-rule behavior.</summary>
+    public string? RulePresetId { get; set; }
     public string? Mask { get; set; }
     public string? MaskFile { get; set; }
     public Dictionary<int, string> CustomCharsets { get; set; } = [];

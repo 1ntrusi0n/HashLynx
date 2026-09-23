@@ -13,6 +13,7 @@ public sealed class HashcatFacade
     private readonly ConcurrentDictionary<string, IReadOnlyList<BackendDevice>> _hardware = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, IReadOnlyList<HashMode>> _modes = new(StringComparer.OrdinalIgnoreCase);
     public HashcatCommandBuilder Commands { get; }
+    public RulePresetCatalog RulePresets => Commands.RulePresets;
     public event Action<string>? Diagnostic;
 
     public HashcatFacade(string? cacheDirectory = null)

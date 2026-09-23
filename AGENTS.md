@@ -3,6 +3,7 @@
 - Always run `dotnet build -c Release` before declaring work complete, and run relevant tests after changes. Full bootstrap/release validation includes `dotnet restore` and `dotnet test -c Release`.
 - Update CHANGELOG.md for material behavior, architecture, dependency, and user-visible changes. Update README.md when setup or user-visible behavior changes.
 - Never modify, reformat, delete, or replace the user's local `hashcat/` release. Never commit it or any downloaded backend/extractor binaries. Use a disposable copy for integration tests that could create backend cache/session files.
+- Keep the user's root `rules/` and `wordlist/` source collections local and unmodified. Built-in presets come from original versioned recipes in `RulePresetRecipes.cs`; regenerate their embedded assets with `scripts/HashLynx.RulePresetGenerator` and retain old version IDs when adding changed recipes.
 - Keep process execution shell-free: `ProcessStartInfo.UseShellExecute = false` and `ArgumentList`. Preview text is presentation only. Never execute it as a shell command.
 - Preserve MVVM: business logic belongs in Core and integration services; WPF code-behind is limited to view lifecycle and interaction.
 - Keep Hashcat-specific options, mode IDs, discovery, parsing, and runtime behavior in HashLynx.Hashcat, not the UI.

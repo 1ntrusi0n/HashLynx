@@ -3,11 +3,13 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using HashLynx.Persistence;
 using HashLynx.Core;
+using HashLynx.Hashcat;
 using HashLynx.UI.Infrastructure;
 using HashLynx.UI.Services;
 using HashLynx.UI.ViewModels;
@@ -57,6 +59,8 @@ internal sealed class SmokeApplication(string output) : Application
                 await RenderAsync(window, page.Name.Replace(" / ", "-"));
             }
 
+            await CheckSimpleWorkflowAsync(shell, store, window);
+
             shell.Selected = shell.Navigation[0];
             for (var family = 0; family < 4; family++)
             {
@@ -78,7 +82,7 @@ internal sealed class SmokeApplication(string output) : Application
             Require((await store.LoadProfilesAsync()).Single().Configuration.TargetPath == "", "Profiles must not save target contents.");
             shell.Attack.SelectedProfile = shell.Attack.Profiles[0];
             shell.Attack.Family = 0;
-            shell.Attack.LoadProfileCommand.Execute(null);
+            await ((AsyncCommand)shell.Attack.LoadProfileCommand).ExecuteAsync(null);
             Require(shell.Attack.Family == 1 && shell.Attack.Mask == "?d?d?d?d", "Loading a profile must restore attack settings.");
             await ((AsyncCommand)shell.Attack.DeleteProfileCommand).ExecuteAsync(null);
             Require((await store.LoadProfilesAsync()).Count == 0, "Deleting a profile must persist its removal.");
@@ -95,7 +99,7 @@ internal sealed class SmokeApplication(string output) : Application
             }
             listener.Flush();
             Require(errors.Length == 0, "WPF binding failures: " + errors);
-            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all six pages; four attack families; three target modes; three themes; narrow layout; profile save/load/delete; preflight error handling; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: ambiguous identification, mode selection, preflight, and masked/revealed results passed." : ""));
+            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all six pages; four attack families; three target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; preflight error handling; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, preset command preflight, and masked/revealed results passed." : ""));
             Console.WriteLine("WPF smoke passed. Screenshots and report: " + output);
             Shutdown(0);
         }
@@ -109,6 +113,90 @@ internal sealed class SmokeApplication(string output) : Application
         finally { PresentationTraceSources.DataBindingSource.Listeners.Remove(listener); }
     }
 
+    private async Task CheckSimpleWorkflowAsync(ShellViewModel shell, PersistenceStore store, Window window)
+    {
+        var attack = shell.Attack;
+        shell.Selected = shell.Navigation[0];
+        Require(!attack.Expert, "A new workspace must begin in Basic mode.");
+        Require(attack.RulePresets.Select(preset => preset.DisplayName).SequenceEqual(new[] { "Quick", "Normal", "Heavy", "Super" }), "The dropdown must offer exactly the four named presets.");
+        Require(attack.SelectedRulePreset.Id == RulePresetCatalog.NormalId, "Normal must be the default preset.");
+        Require(attack.Wordlists.Count == 1 && File.Exists(attack.Wordlists[0]), "A working bundled starter wordlist must be preselected.");
+        Require((await File.ReadAllLinesAsync(attack.Wordlists[0])).Length == 848, "The app must ship the authored starter list.");
+        await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        window.UpdateLayout();
+        Require(!Find<FrameworkElement>(window, "RunOptionsPanel").IsVisible, "Basic mode must hide run options.");
+        Require(!Find<FrameworkElement>(window, "ExpertPreflightPanel").IsVisible, "Basic mode must hide the separate preflight controls.");
+        Require(!Find<FrameworkElement>(window, "CustomRulesPanel").IsVisible, "Basic mode must hide custom rule-file controls.");
+        Require(Find<FrameworkElement>(window, "StartRecoveryButton").IsVisible, "Basic mode must retain Start recovery.");
+        Require(Find<FrameworkElement>(window, "RulesPresetPicker").IsVisible, "Basic mode must show the preset dropdown.");
+        var scroll = Find<ScrollViewer>(window, "AttackScrollViewer");
+        scroll.ScrollToEnd();
+        await RenderAsync(window, "Basic-dictionary-presets");
+        attack.ToggleRulesHelpCommand.Execute(null);
+        Require(attack.RulesHelpVisible, "Question-mark help must open.");
+        await RenderAsync(window, "Rule-help");
+        window.Width = 1040; window.Height = 700;
+        await RenderAsync(window, "Rule-help-narrow");
+        window.Width = 1380; window.Height = 920;
+        attack.ToggleRulesHelpCommand.Execute(null);
+
+        // Expert leftovers must not secretly affect a later Basic attack or profile.
+        attack.Expert = true;
+        attack.UseCustomRules = true;
+        attack.Rules.Add(Path.Combine(store.Paths.Root, "not-installed.rule"));
+        attack.Devices = "not a device";
+        attack.Temperature = "not a temperature";
+        attack.OptimizedKernel = true;
+        attack.DisablePotfile = true;
+        attack.LeftRule = "u";
+        attack.ExtraArguments = "--force";
+        attack.Session = "invalid / expert session";
+        attack.Expert = false;
+        attack.ProfileName = "Basic preset regression";
+        await ((AsyncCommand)attack.SaveProfileCommand).ExecuteAsync(null);
+        var saved = (await store.LoadProfilesAsync()).Single().Configuration;
+        Require(saved.Attack.RulePresetId == RulePresetCatalog.NormalId && saved.Attack.RuleFiles.Count == 0, "Basic mode must save one built-in preset instead of hidden custom rule paths.");
+        Require(saved.Attack.LeftRule is null && saved.Options.Devices.Count == 0 && saved.Options.TemperatureAbort is null, "Basic mode must use automatic controls.");
+        Require(!saved.Options.OptimizedKernel && !saved.Options.DisablePotfile && saved.Options.ExtraArguments.Count == 0, "Hidden Expert options must not apply to Basic mode.");
+        attack.SelectedProfile = attack.Profiles.Single();
+        await ((AsyncCommand)attack.DeleteProfileCommand).ExecuteAsync(null);
+
+        // A pre-preset dictionary profile must preserve its original custom-rule semantics.
+        var legacy = new AttackProfile { Name = "Legacy custom rules", Configuration = new HashcatJob { Attack = new AttackConfiguration { RuleFiles = [Path.Combine(store.Paths.Root, "legacy.rule")] } } };
+        attack.Profiles.Add(legacy);
+        attack.SelectedProfile = legacy;
+        await ((AsyncCommand)attack.LoadProfileCommand).ExecuteAsync(null);
+        Require(attack.Expert && attack.UseCustomRules && attack.Rules.Single().EndsWith("legacy.rule", StringComparison.Ordinal), "Legacy custom profiles must visibly open Expert mode without replacing rules.");
+        await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        Require(Find<FrameworkElement>(window, "RunOptionsPanel").IsVisible && Find<FrameworkElement>(window, "CustomRulesPanel").IsVisible, "Expert panels must become visible.");
+        await RenderAsync(window, "Expert-custom-rules");
+        foreach (var incompatible in new[]
+        {
+            new AttackConfiguration { Kind = "future-attack" },
+            new AttackConfiguration { Kind = AttackFamilies.Mask, RuleFiles = ["custom.rule"] },
+            new AttackConfiguration { Kind = AttackFamilies.Mask, RulePresetId = RulePresetCatalog.QuickId }
+        })
+        {
+            attack.SelectedProfile = new AttackProfile { Name = "Unsupported fixture", Configuration = new HashcatJob { Attack = incompatible } };
+            await ((AsyncCommand)attack.LoadProfileCommand).ExecuteAsync(null);
+            Require(attack.Family == 0 && attack.UseCustomRules && attack.Rules.Single().EndsWith("legacy.rule", StringComparison.Ordinal), "Unsupported profile combinations must be rejected before changing the editor.");
+        }
+        attack.SelectedProfile = legacy;
+        await ((AsyncCommand)attack.DeleteProfileCommand).ExecuteAsync(null);
+        attack.SelectedProfile = new AttackProfile { Name = "Legacy no-rule fixture", Configuration = new HashcatJob() };
+        await ((AsyncCommand)attack.LoadProfileCommand).ExecuteAsync(null);
+        Require(attack.Expert && attack.UseCustomRules && attack.Rules.Count == 0, "Legacy no-rule dictionary profiles must not silently acquire a preset.");
+        attack.SelectedProfile = null;
+        attack.Expert = false;
+        attack.UseCustomRules = false;
+        attack.Rules.Clear();
+        attack.Devices = ""; attack.Temperature = ""; attack.ExtraArguments = ""; attack.LeftRule = "";
+        attack.OptimizedKernel = false; attack.DisablePotfile = false;
+        attack.Session = "hashlynx-smoke";
+        await ((AsyncCommand)attack.UseStarterCommand).ExecuteAsync(null);
+        scroll.ScrollToTop();
+    }
+
     private async Task CheckConnectedWorkflowAsync(ShellViewModel shell, AppServices services, Window window, string executable)
     {
         await services.ConnectAsync(executable);
@@ -118,10 +206,19 @@ internal sealed class SmokeApplication(string output) : Application
         var inspector = shell.Attack.Inspector;
         inspector.InputMode = 0;
         inspector.HashText = digest;
-        await inspector.AnalyzeAsync();
+        shell.Attack.Expert = false;
+        shell.Attack.Family = 0;
+        await ((AsyncCommand)shell.Attack.UseStarterCommand).ExecuteAsync(null);
+        var jobsBefore = shell.Jobs.Jobs.Count;
+        await ((AsyncCommand)shell.Attack.StartCommand).ExecuteAsync(null);
         Require(inspector.Matches.Count > 1 && inspector.SelectedMode is null, "Ambiguous targets must require an explicit mode choice.");
+        Require(shell.Jobs.Jobs.Count == jobsBefore, "Automatic Start identification must not launch an ambiguous target.");
+        Require(shell.Attack.StartFeedback.Contains("hash mode", StringComparison.OrdinalIgnoreCase), "Automatic validation errors must remain visible in Basic mode.");
         inspector.SelectedMatch = inspector.Matches.Single(mode => mode.Mode == 0);
         Require(inspector.SelectedMode?.Mode == 0, "Selecting an identification result must set the attack mode.");
+        await ((AsyncCommand)shell.Attack.PreflightCommand).ExecuteAsync(null);
+        Require(shell.Attack.Preflight.StartsWith("Ready to start", StringComparison.Ordinal), "Basic dictionary preset must pass automatic validation: " + shell.Attack.Preflight);
+        Require(shell.Attack.Preview.Contains(RulePresetCatalog.NormalId + ".rule", StringComparison.Ordinal), "The built-in preset must be present in the executed command configuration.");
         shell.Selected = shell.Navigation[0];
         shell.Attack.Family = 1;
         shell.Attack.Mask = "?d?d?d?d";
@@ -170,5 +267,27 @@ internal sealed class SmokeApplication(string output) : Application
     private static void Require(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException(message);
+    }
+
+    private static T Find<T>(DependencyObject root, string name) where T : FrameworkElement
+    {
+        if (root is T element && element.Name == name) return element;
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+        {
+            var found = FindOrNull<T>(VisualTreeHelper.GetChild(root, index), name);
+            if (found is not null) return found;
+        }
+        throw new InvalidOperationException("Expected UI element was not loaded: " + name);
+    }
+
+    private static T? FindOrNull<T>(DependencyObject root, string name) where T : FrameworkElement
+    {
+        if (root is T element && element.Name == name) return element;
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+        {
+            var found = FindOrNull<T>(VisualTreeHelper.GetChild(root, index), name);
+            if (found is not null) return found;
+        }
+        return null;
     }
 }

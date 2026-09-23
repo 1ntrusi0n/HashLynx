@@ -27,7 +27,13 @@ public sealed class JobValidator(HashcatCommandBuilder builder)
         if (job.Attack.Kind == AttackFamilies.Combinator && count != 2) Error("Wordlists", "Combinator requires exactly two wordlists, left then right.");
         if (job.Attack.Kind is AttackFamilies.HybridWordlistMask or AttackFamilies.HybridMaskWordlist && count != 1) Error("Wordlists", "Hybrid requires one wordlist and one mask.");
         foreach (var path in job.Attack.Wordlists) RequireFile("Wordlist", path);
-        foreach (var path in job.Attack.RuleFiles) RequireFile("Rule file", path);
+        IReadOnlyList<string> ruleFiles = job.Attack.RuleFiles;
+        try { ruleFiles = builder.ResolveRuleFiles(job.Attack); }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            Error("Rules", ex is ArgumentException ? ex.Message : "The built-in rule preset could not be prepared. Check access to the application data directory.");
+        }
+        foreach (var path in ruleFiles) RequireFile("Rule file", path);
         var hasMask = job.Attack.Kind is AttackFamilies.Mask or AttackFamilies.HybridWordlistMask or AttackFamilies.HybridMaskWordlist;
         if (hasMask)
         {
@@ -44,9 +50,9 @@ public sealed class JobValidator(HashcatCommandBuilder builder)
             }
         }
         else if (job.Attack.Increment || job.Attack.CustomCharsets.Count > 0) Error("Mask", "Increment and custom charsets require a mask attack.");
-        if (job.Attack.RuleFiles.Count > 0 && job.Attack.Kind is not (AttackFamilies.Dictionary or "hashcat:9")) Error("Rules", "This Hashcat release accepts rule files with dictionary or association attacks. Use inline left/right rules for hybrid or combinator.");
+        if (ruleFiles.Count > 0 && job.Attack.Kind is not (AttackFamilies.Dictionary or "hashcat:9")) Error("Rules", "This Hashcat release accepts rule files with dictionary or association attacks. Use inline left/right rules for hybrid or combinator.");
         if (job.Attack.Loopback && job.Attack.Kind != AttackFamilies.Dictionary) Error("Loopback", "Loopback is available with dictionary attacks.");
-        if (job.Attack.Loopback && job.Attack.RuleFiles.Count == 0) Error("Loopback", "Loopback requires at least one dictionary rule file.");
+        if (job.Attack.Loopback && ruleFiles.Count == 0) Error("Loopback", "Loopback requires at least one dictionary rule file.");
         if (job.Attack.Loopback && job.Options.ExtraArguments.Any(value => value == "--limit" || value.StartsWith("--limit=", StringComparison.Ordinal))) Error("Loopback", "Loopback cannot be combined with an advanced candidate limit.");
         if (job.Attack.Increment && (job.Attack.IncrementMinimum < 1 || job.Attack.IncrementMaximum < job.Attack.IncrementMinimum)) Error("Increment", "Increment must have a positive minimum no greater than its maximum.");
         foreach (var pair in job.Attack.CustomCharsets)
@@ -62,7 +68,7 @@ public sealed class JobValidator(HashcatCommandBuilder builder)
         try
         {
             var outputs = new[] { builder.GetOutputPath(job), builder.GetRestorePath(job), builder.GetPotfilePath(job) };
-            var inputs = new[] { job.TargetPath, installation.ExecutablePath }.Concat(job.Attack.Wordlists).Concat(job.Attack.RuleFiles).Append(job.Attack.MaskFile ?? "").Where(p => !string.IsNullOrWhiteSpace(p)).Select(Path.GetFullPath).ToList();
+            var inputs = new[] { job.TargetPath, installation.ExecutablePath }.Concat(job.Attack.Wordlists).Concat(ruleFiles).Append(job.Attack.MaskFile ?? "").Where(p => !string.IsNullOrWhiteSpace(p)).Select(Path.GetFullPath).ToList();
             if (outputs.Distinct(StringComparer.OrdinalIgnoreCase).Count() != outputs.Length) Error("Output", "Output, restore and potfile must use different paths.");
             foreach (var path in outputs)
             {

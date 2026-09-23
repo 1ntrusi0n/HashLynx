@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="..\HashLynx.Core\HashLynx.Core.csproj" />
+    <EmbeddedResource Include="..\..\assets\wordlists\hashlynx-starter.txt" LogicalName="HashLynx.StarterWordlist" />
   </ItemGroup>
 </Project>

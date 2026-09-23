@@ -4,6 +4,20 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ## [Unreleased]
 
+### Added
+
+- Original, embedded Quick (64), Normal (512), Heavy (4,096), and Super (16,384) Dictionary rule presets, with deterministic regeneration and versioned profile identifiers.
+- An original 848-word starter list, automatic selection for new configurations, and direct access to an optional local full wordlist.
+- Clickable rule help with Hashcat syntax and before/after examples.
+- Tests for preset generation, command selection, validation, asset repair, starter-list discovery, and Basic/Expert workflows; optional real Hashcat rule-output validation.
+
+### Changed
+
+- Start recovery performs target identification and preflight automatically; ambiguous hashes still require an explicit mode choice.
+- Run options, custom rule files, separate Preflight, and command preview are Expert controls. Basic mode uses managed defaults and excludes hidden Expert settings from jobs.
+- Legacy profiles preserve their custom/no-rule behavior and reveal advanced settings in Expert mode. Edits during asynchronous launch checks require a fresh Start.
+- Large local source rule and wordlist collections are excluded from Git and publish output; the compact original assets ship in the application.
+
 ## [0.1.0] - 2026-09-23
 
 ### Added

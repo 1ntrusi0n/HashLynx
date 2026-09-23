@@ -12,6 +12,10 @@ John the Ripper and utilities such as pdf2john, zip2john, rar2john, and 7z2john 
 
 HashLynx's MIT license does not relicense any external software. Process adapters and output parsers in this repository are HashLynx code; the extraction implementations remain external.
 
+## Rule presets and starter wordlist
+
+The embedded HashLynx rule presets are generated from original recipes in `RulePresetRecipes.cs`, and `assets/wordlists/hashlynx-starter.txt` is an original educational starter list. These assets are covered by the project's MIT license. Local third-party rule and combined wordlist collections were inspected to inform coverage choices, but their files are not redistributed. Custom rule files and wordlists supplied by users retain any applicable upstream terms.
+
 ## Development dependencies
 
 The .NET SDK/runtime and WPF are Microsoft/.NET Foundation projects with their own notices. Test projects use xUnit.net (Apache-2.0), the xUnit Visual Studio runner (Apache-2.0), and Microsoft.NET.Test.Sdk (MIT). These test packages are not part of the application runtime. GitHub Actions used for CI retain their respective upstream licenses.

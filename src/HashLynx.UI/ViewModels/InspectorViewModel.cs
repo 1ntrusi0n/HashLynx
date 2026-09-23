@@ -13,6 +13,7 @@ public sealed class InspectorViewModel : ObservableObject
     private List<HashMode> _catalog = [];
     private int _inputMode;
     private long _revision;
+    public long TargetRevision => _revision;
     private CancellationTokenSource _targetCancellation;
     private string _hashText = "", _targetPath = "", _summary = "Choose a target, then analyze it with your installed Hashcat release.", _search = "", _context = "Unknown / Not sure", _problems = "";
     private HashMode? _selectedMode;

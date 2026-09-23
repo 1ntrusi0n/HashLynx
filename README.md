@@ -12,9 +12,9 @@ HashLynx is an independent GUI frontend. Hashcat is a separate third-party proje
 
 - Native C#/.NET 10 WPF shell with MVVM, the supplied branding, a multi-size Windows icon, navy/teal styling, and Dark/Light/System preferences.
 - **Target Inspector** with Paste Hash, Hash File, and Encrypted File inputs; file browsing and drag/drop; source/context selection; Hashcat identification; and a searchable manual mode catalog generated from the installed release.
-- Dictionary, Mask, both Hybrid directions, and Combinator configurations. Rules are modifiers within applicable attacks. Wordlists can be added, removed, and reordered. Bundled rules are browsed from the user's Hashcat release.
+- Dictionary, Mask, both Hybrid directions, and Combinator configurations. Dictionary attacks include original Quick, Normal, Heavy, and Super rule presets, an 848-word starter list, and clickable rule examples. Expert mode supports custom rule files and multiple wordlists.
 - Mask/custom charset validation, increment settings, workload/device/temperature controls, named sessions, potfile/output options, and a constrained Expert argument extension field.
-- Structured command building, a copyable command preview, and preflight validation of input files, modes, masks, paths, and supported options. Commands execute with `ProcessStartInfo.ArgumentList`, never through a shell.
+- Automatic validation when starting recovery, with run options, a copyable command preview, and a separate Preflight button in Expert mode. Commands execute with `ProcessStartInfo.ArgumentList`, never through a shell.
 - Asynchronous jobs, parsed JSON status metrics, stop, job history, interrupted-job detection, and restore when a saved Hashcat restore file exists.
 - Results associated with jobs, Hashcat `--show` integration, plaintext hide/reveal, copy, and export. Hardware discovery and refresh use Hashcat's backend information.
 - An extensible extractor registry and manager for PDF, ZIP, RAR, 7-Zip, and BitLocker. Missing tools are shown as unavailable. Tool/interpreter locations are configurable and persisted.
@@ -81,15 +81,31 @@ Or run `./scripts/build.ps1 -Publish`. Copy the publish directory as a unit. Obt
 
 ## Recovery workflow
 
-1. Inspect a pasted hash, hash file, or encrypted file.
-2. Analyze it and confirm the hash mode if ambiguous, or use the searchable manual picker.
-3. Choose Dictionary, Mask, Hybrid, or Combinator. Configure wordlists, applicable rules, and mask options.
-4. Review common/Expert settings, run Preflight, and inspect the exact logical command.
-5. Start the job, monitor it on Jobs, and refresh its Results after recovery.
+1. Add a pasted hash, hash file, or encrypted file in Target Inspector.
+2. For a Dictionary attack, use the included starter wordlist or choose your own. Normal rules are selected by default.
+3. Press **Start recovery**. HashLynx identifies the target when needed and checks the configuration automatically. If several hash modes match, choose the correct mode and press Start again.
+4. Monitor the job on Jobs and refresh its Results after recovery.
+
+Basic mode manages devices, session names, result paths, and other run settings. Enable **Expert mode** to select custom rule files, adjust run options, or use the separate Preflight and command-preview controls. Existing profiles with custom rules or advanced options open Expert mode so their saved behavior remains visible. Mask, Hybrid, and Combinator attacks remain available for users who need them.
+
+### Built-in rules and wordlists
+
+A wordlist supplies starting words; rules transform each word into password candidates. For example, the rule `c$1$!` turns `river` into `River1!`. Click **?** beside the rule preset for an explanation and more examples.
+
+| Preset | Rules per word | Added coverage |
+| --- | ---: | --- |
+| Quick | 64 | Common case changes, short numbers, symbols, and substitutions |
+| Normal (default) | 512 | Two-digit endings, years, and simple prefixes |
+| Heavy | 4,096 | Three-digit endings, more combinations, and selected position changes |
+| Super | 16,384 | Four-digit endings, broader prefixes, and paired substitutions |
+
+Each tier contains the smaller tiers and uses one rule file. These are effort budgets, not measured recovery-rate rankings; candidates can coincide, and larger tiers take more work. With the 848-word starter list, Normal applies 434,176 rules in total. See [preset design and regeneration](docs/rule-presets.md).
+
+The starter list is an original, small educational list embedded in the app (about 6 KB). A larger list appropriate to the target will often be more useful. **Choose wordlist** accepts your own local file. When `wordlist/HashLynx_Wordlist.txt` exists beside the app or in the development checkout, **Use local full list** selects it directly. The supplied combined list is about 506 MiB and 47.4 million lines; it stays local and is not copied into the repository or publish output. The root `rules/` and `wordlist/` source collections are Git-ignored.
 
 The application never adds `--force`. Backend warnings and driver incompatibilities must be resolved normally. Expert arguments are restricted to an explicit set of additional options; they cannot replace managed target/mode/session/output settings or enable network features.
 
-With the verified Hashcat 7.1.2 mappings, rule files apply to Dictionary; Hybrid and Combinator expose inline left/right rules. Dictionary loopback requires a rule file. Expert arguments use one separated argument per line, for example `--runtime=60`; the preview remains read-only.
+With the verified Hashcat 7.1.2 mappings, rule files apply to Dictionary; Hybrid and Combinator expose inline left/right rules. Dictionary loopback requires a rule file or preset. Expert custom rule files replace the preset; selecting several custom files causes Hashcat to combine their transformations multiplicatively. To run an unmodified dictionary in Expert mode, select custom rules and leave the file list empty. Expert arguments use one separated argument per line, for example `--runtime=60`; the preview remains read-only.
 
 Pause/resume/checkpoint controls are disabled unless the backend's interactive transport is known to work. This Windows bootstrap does not claim verified console-key control through redirected pipes. **Stop** terminates the child process tree. Resume after exit is available only if Hashcat already wrote a usable restore file; stopping cannot guarantee a fresh checkpoint. Job history records completion, exhaustion, interruption, failure, and stop outcomes separately.
 
@@ -124,6 +140,8 @@ Mutable data lives under `%LOCALAPPDATA%\HashLynx\`:
 | `jobs/` | Managed job/session state and fallback per-job outputs |
 | `results/` | Default result files and potfile |
 | `cache/` | Versioned mode catalog and backend support workspace |
+| `rule-presets/` | Materialized, versioned built-in rule files |
+| `wordlists/` | Materialized bundled starter wordlist |
 | `logs/` | Sanitized JSON diagnostic events |
 
 These files are **not encrypted by HashLynx**. Result files and potfiles contain recoverable credentials; hexadecimal output is encoding, not encryption. Protect them using your normal Windows account and disk controls. Data is retained for job recovery/history until you remove it. Review exports before sharing. Diagnostic logs exclude raw command lines, target values, recovered plaintext, and candidate data. Invalid saved JSON is preserved and reported rather than silently overwritten.
@@ -139,6 +157,7 @@ These files are **not encrypted by HashLynx**. Result files and potfiles contain
 | `src/HashLynx.Persistence` | Per-user paths, atomic JSON stores, structured logging |
 | `tests/` | xUnit unit tests, opt-in backend integration checks, WPF smoke harness |
 | `assets/branding` | PNG resources and multi-size ICO |
+| `assets/wordlists` | Original bundled starter wordlist |
 | `docs/`, `scripts/` | Integration notes and build/validation tools |
 
 Attack family identifiers are strings; backend mode IDs are obtained from installed help and kept in the integration layer. Extractors are selected through a registry, allowing new formats without file-type logic in the GUI. There is no webview shell or network service.
@@ -154,7 +173,7 @@ dotnet test tests/HashLynx.Integration.Tests -c Release --filter Category=Integr
 
 This is an integration check, not a claim of recovery support on every driver. Initial local validation used Hashcat **v7.1.2**. The available Intel OpenCL driver was rejected by Hashcat, so successful GPU/CPU cracking and live interactive controls could not be validated on that machine. No warning-suppression flags were used. Real encrypted fixtures and a supported compute driver are still needed for a broader end-to-end matrix.
 
-Run `dotnet run --project tests/HashLynx.UI.Smoke -c Release -- artifacts/ui-smoke` for isolated missing-backend startup, all page/template loading, attack/input/theme layouts, profile operations, and WPF binding checks. Screenshots and the pass/fail report stay under the ignored artifacts directory. CI also runs this harness.
+Run `dotnet run --project tests/HashLynx.UI.Smoke -c Release -- artifacts/ui-smoke` for isolated missing-backend startup, all page/template loading, attack/input/theme layouts, Basic/Expert control visibility, bundled content, legacy/custom profiles, and WPF binding checks. With `HASHLYNX_TEST_HASHCAT` set, it also checks automatic validation and preset command generation. Screenshots and the pass/fail report stay under the ignored artifacts directory. CI also runs this harness.
 
 Status, ETA, temperatures, and device utilization are shown only when supplied by Hashcat. Candidate strings are deliberately omitted from persisted monitoring data to reduce secret duplication. Large result sets currently load into memory when refreshed; very large recovery outputs may need a future paged results viewer. File structural analysis is bounded and best-effort. The first release does not include installers, automatic updates, automatic dependency downloads, or new attack families beyond those listed above.
 

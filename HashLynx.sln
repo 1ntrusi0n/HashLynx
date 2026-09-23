@@ -31,6 +31,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HashLynx.Hashcat.Tests", "t
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HashLynx.ProcessFixture", "tests\HashLynx.ProcessFixture\HashLynx.ProcessFixture.csproj", "{B9815F19-831F-446B-BC5C-E2378A0F36DC}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scripts", "scripts", "{C4AD9936-F0DF-1090-6077-3D4A6324E662}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HashLynx.RulePresetGenerator", "scripts\HashLynx.RulePresetGenerator\HashLynx.RulePresetGenerator.csproj", "{C724948E-D8D0-4BD0-B553-71C11E38007E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -185,6 +189,18 @@ Global
 		{B9815F19-831F-446B-BC5C-E2378A0F36DC}.Release|x64.Build.0 = Release|Any CPU
 		{B9815F19-831F-446B-BC5C-E2378A0F36DC}.Release|x86.ActiveCfg = Release|Any CPU
 		{B9815F19-831F-446B-BC5C-E2378A0F36DC}.Release|x86.Build.0 = Release|Any CPU
+		{C724948E-D8D0-4BD0-B553-71C11E38007E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C724948E-D8D0-4BD0-B553-71C11E38007E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C724948E-D8D0-4BD0-B553-71C11E38007E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{C724948E-D8D0-4BD0-B553-71C11E38007E}.Debug|x64.Build.0 = Debug|Any CPU
+		{C724948E-D8D0-4BD0-B553-71C11E38007E}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{C724948E-D8D0-4BD0-B553-71C11E38007E}.Debug|x86.Build.0 = Debug|Any CPU
+		{C724948E-D8D0-4BD0-B553-71C11E38007E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C724948E-D8D0-4BD0-B553-71C11E38007E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C724948E-D8D0-4BD0-B553-71C11E38007E}.Release|x64.ActiveCfg = Release|Any CPU
+		{C724948E-D8D0-4BD0-B553-71C11E38007E}.Release|x64.Build.0 = Release|Any CPU
+		{C724948E-D8D0-4BD0-B553-71C11E38007E}.Release|x86.ActiveCfg = Release|Any CPU
+		{C724948E-D8D0-4BD0-B553-71C11E38007E}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -202,5 +218,6 @@ Global
 		{25E3259E-7FD1-46F9-9C35-44AF2BD6DCF1} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{BFA5180B-FD40-440A-84CE-05DFBCE7DD2A} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{B9815F19-831F-446B-BC5C-E2378A0F36DC} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{C724948E-D8D0-4BD0-B553-71C11E38007E} = {C4AD9936-F0DF-1090-6077-3D4A6324E662}
 	EndGlobalSection
 EndGlobal

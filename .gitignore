@@ -1,5 +1,8 @@
 # Local third-party backend: never edit or commit this release.
 /hashcat/
+# User-supplied source collections stay local; curated app assets live under assets/.
+/rules/
+/wordlist/
 /tools/
 /kernels/
 /artifacts/
