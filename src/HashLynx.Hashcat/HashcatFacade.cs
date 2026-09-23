@@ -131,6 +131,24 @@ public sealed class HashcatFacade
         return _runner.Start(Commands.BuildRestore(installation, job), progress, cancellationToken, installation.Capabilities.InteractiveControls);
     }
 
+    /// <summary>Reads only recoveries written by this session. The shared potfile cannot establish session ownership.</summary>
+    public async Task<IReadOnlyList<RecoveredResult>> ReadSessionResultsAsync(HashcatJob job, CancellationToken cancellationToken = default)
+    {
+        var output = Commands.GetOutputPath(job);
+        try
+        {
+            await using var stream = new FileStream(output, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
+            using var reader = new StreamReader(stream);
+            var contents = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+            // Hashcat terminates output records with a newline. Ignore a record that is still being written.
+            var end = contents.LastIndexOf('\n');
+            return end < 0 ? [] : RecoveredResultParser.Parse(contents[..(end + 1)]).DistinctBy(result => (result.Hash, result.HexPlaintext)).ToArray();
+        }
+        catch (FileNotFoundException) { return []; }
+        catch (DirectoryNotFoundException) { return []; }
+    }
+
+    /// <summary>Queries known target matches in a potfile; these are not necessarily recoveries made by this session.</summary>
     public async Task<IReadOnlyList<RecoveredResult>> ShowAsync(HashcatInstallation installation, HashcatJob job, CancellationToken cancellationToken = default)
     {
         if (job.Options.DisablePotfile || !File.Exists(Commands.GetPotfilePath(job)))

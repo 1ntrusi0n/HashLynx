@@ -179,6 +179,16 @@ public sealed class CommandTests : IDisposable
     }
 
     [Fact]
+    public void NewSessionsCannotAppendToExistingResultFiles()
+    {
+        var job = Job();
+        System.IO.File.WriteAllText(job.Options.OutputPath!, "existing-session-result");
+        var result = new JobValidator(_builder).Validate(_installation, job);
+        Assert.Contains(result.Errors, error => error.Field == "Output" && error.Message.Contains("new output file"));
+        Assert.Equal("existing-session-result", System.IO.File.ReadAllText(job.Options.OutputPath!));
+    }
+
+    [Fact]
     public void ValidDictionaryPreflightSucceedsWithoutRunningABackend()
     {
         var result = new JobValidator(_builder).Validate(_installation, Job());

@@ -72,6 +72,7 @@ internal sealed class SmokeApplication(string output) : Application
             await CheckManualCatalogAsync(shell, window, true);
             await CheckPopulatedJobsAsync(shell, window);
             await CheckSessionHistoryAsync(shell, store, window);
+            await CheckSessionResultsIsolationAsync(shell, store, window);
 
             shell.Selected = shell.Navigation[0];
             for (var family = 0; family < 4; family++)
@@ -271,6 +272,9 @@ internal sealed class SmokeApplication(string output) : Application
             Configuration = new HashcatJob { TargetPath = inspector.PreparedTargetPath!, HashMode = 0, Options = new CommonOptions { PotfilePath = potfile } }
         };
         var row = new JobViewModel(record);
+        var sessionOutput = services.Backend.Commands.GetOutputPath(record.Configuration);
+        Directory.CreateDirectory(Path.GetDirectoryName(sessionOutput)!);
+        await File.WriteAllTextAsync(sessionOutput, digest + ":" + Convert.ToHexString(Encoding.UTF8.GetBytes(plaintext)) + "\n");
         shell.Jobs.Jobs.Add(row);
         var results = (ResultsViewModel)shell.Navigation.Single(page => page.Page is ResultsViewModel).Page;
         results.SelectedJob = row;
@@ -299,6 +303,60 @@ internal sealed class SmokeApplication(string output) : Application
         Require(results.Results.Count == 0 && !results.Reveal, "An in-flight load must not repopulate a cleared selection or preserve reveal state.");
         inspector.HashText = "changed target";
         Require(inspector.SelectedMode is null && inspector.PreparedTargetPath is null, "Editing a target must invalidate identification and prepared input.");
+    }
+
+    private async Task CheckSessionResultsIsolationAsync(ShellViewModel shell, PersistenceStore store, Window window)
+    {
+        var results = (ResultsViewModel)shell.Navigation.Single(page => page.Page is ResultsViewModel).Page;
+        var potfile = Path.Combine(store.Paths.Root, "shared-results-fixture.potfile");
+        await File.WriteAllTextAsync(potfile, "hash-a:alpha\nhash-b:beta\n");
+        JobViewModel Row(string name, string? output = null) => new(new JobRecord { Name = name, State = JobState.Cracked, Configuration = new HashcatJob { TargetPath = "shared-target-fixture", Options = new() { PotfilePath = potfile, OutputPath = output ?? Path.Combine(store.Paths.Root, name + ".txt") } } });
+        var first = Row("Session A"); var second = Row("Session B"); var empty = Row("No new recoveries");
+        await File.WriteAllTextAsync(first.Output, "hash-a:616c706861\n");
+        await File.WriteAllTextAsync(second.Output, "hash-b:62657461\n");
+        foreach (var row in new[] { first, second, empty }) shell.Jobs.Jobs.Add(row);
+        results.SelectedJob = first; await results.Loading;
+        Require(results.Results.Count == 1 && results.Results[0].Hash == "hash-a" && results.Results[0].SessionId == first.Record.Id, "Selected session must read only its own output, even with a shared target and potfile.");
+        results.SelectedJob = empty; await results.Loading;
+        Require(results.Results.Count == 0, "A session with no output must not inherit passwords from the shared potfile.");
+        results.SelectedJob = second; await results.Loading;
+        Require(results.Results.Count == 1 && results.Results[0].Hash == "hash-b", "Switching sessions must replace the recovered hash set.");
+        shell.Jobs.Selected = second;
+        shell.Selected = shell.Navigation.Single(page => page.Page == results);
+        await RenderAsync(window, "Session-only-results");
+        var allSessions = Find<CheckBox>(window, "AllSessionsResultsCheckBox");
+        allSessions.IsChecked = true;
+        await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        await results.Loading;
+        Require(results.ShowAllSessions && results.Results.Count == 2 && results.Results.Select(row => row.SessionId).Distinct().Count() == 2, "All Sessions must combine attributed rows from history without including potfile-only matches.");
+        Require(!Find<ComboBox>(window, "ResultsSessionPicker").IsEnabled && !results.Reveal, "All Sessions must disable single-session selection and start masked.");
+        results.Reveal = true;
+        Require(results.Results.Any(row => row.Session == "Session A" && row.Plaintext == "alpha") && results.Results.Any(row => row.Session == "Session B" && row.Plaintext == "beta"), "Combined results must retain hash/password/session associations.");
+        await RenderAsync(window, "All-session-results");
+        allSessions.IsChecked = false;
+        await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        await results.Loading;
+        Require(results.Results.Count == 1 && results.Results[0].SessionId == second.Record.Id && !results.Reveal, "Unchecking All Sessions must restore the selected session and reset reveal.");
+        results.ShowAllSessions = true; await results.Loading;
+        shell.Jobs.Selected = first;
+        await ((AsyncCommand)shell.Jobs.DeleteCommand).ExecuteAsync(null); await results.Loading;
+        Require(results.Results.Count == 1 && results.Results[0].SessionId == second.Record.Id, "Deleting a session must remove its rows from All Sessions.");
+        await ((AsyncCommand)shell.Jobs.UndoDeleteCommand).ExecuteAsync(null); await results.Loading;
+        Require(results.Results.Count == 2, "Undo must restore a session's rows in All Sessions.");
+        var ambiguous = Row("Shared output fixture", first.Output);
+        shell.Jobs.Jobs.Add(ambiguous); await results.Loading;
+        Require(results.Results.Count == 1 && results.Results[0].SessionId == second.Record.Id && results.Status.Contains("excluded", StringComparison.Ordinal), "An output shared by multiple legacy sessions must not be attributed to either session.");
+        shell.Jobs.Jobs.Remove(ambiguous); await results.Loading;
+        var count = shell.Jobs.Jobs.Count;
+        try { await shell.Jobs.StartAsync(new HashcatJob { Options = new() { OutputPath = first.Output } }); throw new InvalidOperationException("Expected shared-output rejection."); }
+        catch (InvalidOperationException exception) when (exception.Message.Contains("Another session", StringComparison.Ordinal)) { }
+        Require(shell.Jobs.Jobs.Count == count, "Rejecting a shared output must not create a session.");
+        shell.Jobs.Selected = first;
+        await ((AsyncCommand)shell.Jobs.ViewResultsCommand).ExecuteAsync(null);
+        Require(!results.ShowAllSessions && results.Results.Count == 1 && results.Results[0].SessionId == first.Record.Id, "A job's View action must exit All Sessions and show only that job.");
+        results.SelectedJob = null;
+        foreach (var row in new[] { first, second, empty }) shell.Jobs.Jobs.Remove(row);
+        shell.Jobs.Selected = null; await shell.Jobs.SaveAsync();
     }
 
     private async Task CheckSessionHistoryAsync(ShellViewModel shell, PersistenceStore store, Window window)

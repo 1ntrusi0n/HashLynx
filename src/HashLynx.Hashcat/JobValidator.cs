@@ -68,6 +68,7 @@ public sealed class JobValidator(HashcatCommandBuilder builder)
         try
         {
             var outputs = new[] { builder.GetOutputPath(job), builder.GetRestorePath(job), builder.GetPotfilePath(job) };
+            if (File.Exists(outputs[0])) Error("Output", "Choose a new output file for each session. Reusing an existing file would mix recovered results. Use Restore to resume an existing session.");
             var inputs = new[] { job.TargetPath, installation.ExecutablePath }.Concat(job.Attack.Wordlists).Concat(ruleFiles).Append(job.Attack.MaskFile ?? "").Where(p => !string.IsNullOrWhiteSpace(p)).Select(Path.GetFullPath).ToList();
             if (outputs.Distinct(StringComparer.OrdinalIgnoreCase).Count() != outputs.Length) Error("Output", "Output, restore and potfile must use different paths.");
             foreach (var path in outputs)

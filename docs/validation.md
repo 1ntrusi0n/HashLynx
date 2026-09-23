@@ -1,5 +1,13 @@
 # Validation
 
+## Session-specific and combined results — 2026-09-23
+
+- The previous Results view used Hashcat `--show` against the shared potfile, which returns known target matches rather than proving which session recovered them. Results now reads only each session's `--outfile` data; the explicit low-level potfile lookup remains separate from session display.
+- New backend tests verify isolation with shared targets/potfiles, no fallback when a session output is missing, reading without a backend/target/potfile, and ignoring incomplete records while deduplicating repeated records within a session. New-session preflight rejects existing output files; the Jobs layer also rejects output paths reserved by another session.
+- WPF checks passed for selected-session isolation, an empty session, the Show All Sessions Results checkbox, source labels, switching back, reveal reset, Delete/Undo in the combined view, rejection of ambiguous shared outputs, and opening a job directly from the combined view. These checks use synthetic local output files with no backend required.
+- Connected WPF smoke and an actual Basic-mode NTLM CPU recovery passed using session output for the displayed password. User recovery files and history were not modified during diagnosis or tests.
+- Release build passed with zero warnings/errors. All 170 standard tests passed (18 Core, 93 Hashcat, 42 Extractors, 17 Persistence); three opt-in backend tests were skipped in that run. WPF checks passed separately with zero binding errors.
+
 ## Recovered passwords and session history actions — 2026-09-23
 
 - Jobs provides a View recovered passwords action and a completion message. Connected WPF smoke verifies that the action opens the matching session, loads the hash/password pair, and reveals the requested password; direct session selection remains masked initially. The session dropdown displays the job name.

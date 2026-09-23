@@ -16,7 +16,7 @@ HashLynx is an independent GUI frontend. Hashcat is a separate third-party proje
 - Mask/custom charset validation, increment settings, workload/device/temperature controls, named sessions, potfile/output options, and a constrained Expert argument extension field.
 - Automatic validation when starting recovery, with run options, a copyable command preview, and a separate Preflight button in Expert mode. Commands execute with `ProcessStartInfo.ArgumentList`, never through a shell.
 - Asynchronous jobs, parsed JSON status metrics, stop, job history, interrupted-job detection, and restore when a saved Hashcat restore file exists.
-- Results associated with jobs, Hashcat `--show` integration, plaintext hide/reveal, copy, and export. Hardware discovery and refresh use Hashcat's backend information.
+- Session-specific recovered results, an all-sessions view, plaintext hide/reveal, copy, and export. Hardware discovery and refresh use Hashcat's backend information.
 - An extensible extractor registry and manager for PDF, ZIP, RAR, 7-Zip, and BitLocker. Missing tools are shown as unavailable. Tool/interpreter locations are configurable and persisted.
 - Attack profile save/load/delete, per-user JSON persistence with atomic writes, sanitized structured diagnostics, and a Windows build/test workflow.
 
@@ -87,6 +87,10 @@ Or run `./scripts/build.ps1 -Publish`. Copy the publish directory as a unit. Obt
 4. On **Jobs**, select the session and click **View recovered passwords**. HashLynx opens its recovered **Hash** and **Password** table and reveals the passwords you requested. Select a row to copy its password, or export the results to CSV.
 
 Selecting a session directly on **Results** loads its results automatically, with passwords initially hidden. Use **Show passwords** to reveal or hide them; **Refresh results** checks for additional recoveries from an ongoing job.
+
+Each session shows only passwords written to its own output file. Hashcat's shared potfile is a cache of previously known passwords, so its matches are not assigned to later sessions. If a session has no output, it shows no recovered rows; results can still be read without the original target or an installed backend. Missing output files cannot be reconstructed with reliable session ownership from the shared cache.
+
+Check **Show All Sessions Results** to combine results from all sessions currently in history. The **Session** column identifies each row's source; CSV exports include the session name and ID. Uncheck it to return to the selected session. New attacks require a separate, unused output file; restore continues using the original session's file. Ambiguous legacy output files shared by multiple sessions are excluded with a message instead of assigning their passwords to both sessions.
 
 To clean up history, select an inactive session on **Jobs** and click **Delete session**. **Undo delete** restores removed entries while HashLynx remains open. Deletion removes the history entry only: target, output, checkpoint, and potfile data remain on disk. Running and paused sessions cannot be deleted.
 

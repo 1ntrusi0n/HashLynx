@@ -112,6 +112,9 @@ public sealed class JobsViewModel : ObservableObject
     }
     public async Task StartAsync(HashcatJob configuration)
     {
+        var output = _services.Backend.Commands.GetOutputPath(configuration);
+        if (Jobs.Any(job => string.Equals(_services.Backend.Commands.GetOutputPath(job.Record.Configuration), output, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("Another session already uses this output file. Choose a different output file so each session keeps its own results.");
         var record = new JobRecord { Id = configuration.Id, Name = configuration.Name, Configuration = configuration, RestorePath = configuration.Options.RestorePath };
         var viewModel = new JobViewModel(record);
         Jobs.Insert(0, viewModel); Selected = viewModel;

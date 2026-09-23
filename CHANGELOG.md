@@ -6,6 +6,7 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ### Fixed
 
+- Session results now come only from that session's output file. Shared potfile matches are no longer attributed to other sessions, including failed or exhausted runs. New sessions cannot reuse an existing or reserved output file.
 - Recovery device choices can now be saved in Hardware and are honored in Basic mode and after restart. The Attack page shows the effective selection; explicit Expert IDs override the saved default. This avoids falling back to a failing automatic GPU choice when a working CPU was only saved in an attack profile.
 - Populated Jobs pages now bind progress and other display-only values one-way, avoiding read-only property exceptions during job selection and status updates.
 - Explicit backend device IDs now also allow all OpenCL device types, so selecting a CPU is honored even when a GPU is present. The selected IDs still restrict execution; automatic device selection is unchanged.
@@ -14,6 +15,7 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ### Added
 
+- **Show All Sessions Results** combines the results of sessions in history with a source Session column. CSV exports include session names and IDs; deleted sessions are excluded and Undo restores their rows.
 - Jobs now provides **View recovered passwords**, which opens that session's hash/password table and reveals the results on request. Completed recoveries show a clear message, and selecting a session on Results loads it automatically.
 - Inactive sessions can be deleted from history, with Undo until the application closes. Recovery files are retained; running and paused sessions cannot be deleted.
 - Original, embedded Quick (64), Normal (512), Heavy (4,096), and Super (16,384) Dictionary rule presets, with deterministic regeneration and versioned profile identifiers.
