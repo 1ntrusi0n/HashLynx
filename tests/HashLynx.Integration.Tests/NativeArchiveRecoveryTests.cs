@@ -31,6 +31,28 @@ public sealed class InstalledRarFactAttribute : FactAttribute
 
 public sealed class NativeArchiveRecoveryTests(ITestOutputHelper output)
 {
+    [InstalledBitLockerFact]
+    [Trait("Category", "Integration")]
+    public async Task NativeBitLockerMatchesReferenceAndRecoversKnownPassword()
+    {
+        await WithBackendAsync(async (root, facade, installation, ct) =>
+        {
+            var archive = Path.Combine(root, "synthetic-partition.raw");
+            await File.WriteAllBytesAsync(archive, HashLynx.Extractors.Tests.BitLockerFixture.Image(), ct);
+            var extraction = await new BitLockerHashExtractor().ExtractAsync(archive, ct);
+            Assert.True(extraction.Success);
+            var reference = await new ExtractorProcessRunner().RunAsync(new(
+                Environment.GetEnvironmentVariable("HASHLYNX_TEST_PYTHON")!,
+                ["-3", Environment.GetEnvironmentVariable("HASHLYNX_TEST_BITLOCKER_REFERENCE")!, archive]), ct);
+            Assert.Equal(0, reference.ExitCode);
+            Assert.False(reference.OutputTruncated);
+            var hashes = ExtractorOutputParser.Parse("bitlocker", reference.StandardOutput).Hashes;
+            Assert.Contains(Assert.Single(extraction.Hashes), hashes);
+            await RecoverAsync(new BitLockerHashExtractor(), archive, "hashcat", root, facade, installation, ct);
+            output.WriteLine("Native BitLocker matches the reference and passes known-password recovery with full authentication.");
+        });
+    }
+
     [InstalledSevenZipFact]
     [Trait("Category", "Integration")]
     public async Task SevenZipCreatedArchivesExtractIdentifyRecoverAndReturnSessionPassword()
@@ -118,5 +140,17 @@ public sealed class NativeArchiveRecoveryTests(ITestOutputHelper output)
         var completed = await facade.StartJob(installation, job, cancellationToken: ct).Completion;
         Assert.True(completed.ExitCode == 0, $"Native {extractor.DisplayName} recovery (mode {mode}) exited with code {completed.ExitCode}.");
         Assert.Equal(password, Assert.Single(await facade.ReadSessionResultsAsync(job, ct)).Plaintext);
+    }
+}
+
+public sealed class InstalledBitLockerFactAttribute : FactAttribute
+{
+    public InstalledBitLockerFactAttribute()
+    {
+        if (!File.Exists(Environment.GetEnvironmentVariable("HASHLYNX_TEST_HASHCAT")) ||
+            !File.Exists(Environment.GetEnvironmentVariable("HASHLYNX_TEST_PYTHON")) ||
+            !File.Exists(Environment.GetEnvironmentVariable("HASHLYNX_TEST_BITLOCKER_REFERENCE")) ||
+            !int.TryParse(Environment.GetEnvironmentVariable("HASHLYNX_TEST_DEVICE"), out _))
+            Skip = "Set HASHLYNX_TEST_HASHCAT, HASHLYNX_TEST_DEVICE, HASHLYNX_TEST_PYTHON (py.exe) and HASHLYNX_TEST_BITLOCKER_REFERENCE for reference comparison and recovery.";
     }
 }

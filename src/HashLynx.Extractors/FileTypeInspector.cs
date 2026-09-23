@@ -26,8 +26,9 @@ public static class FileTypeInspector
         if (header.Length >= 11 && header.Slice(3, 8).SequenceEqual("-FVE-FS-"u8)) return "bitlocker";
         // MSWIN4.1 alone is an ordinary FAT OEM marker. Require BitLocker To Go's volume GUID too.
         ReadOnlySpan<byte> bitLockerGuid = [0x3b, 0xd6, 0x67, 0x49, 0x29, 0x2e, 0xd8, 0x4a, 0x83, 0x99, 0xf6, 0xa3, 0x39, 0xe3, 0xd0, 0x01];
+        ReadOnlySpan<byte> usedSpaceGuid = [0x3b, 0x4d, 0xa8, 0x92, 0x80, 0xdd, 0x0e, 0x4d, 0x9e, 0x4e, 0xb1, 0xe3, 0x28, 0x4e, 0xae, 0xd8];
         if (header.Length >= 0x1b8 && header.Slice(3, 8).SequenceEqual("MSWIN4.1"u8)
-            && header.Slice(0x1a8, 16).SequenceEqual(bitLockerGuid)) return "bitlocker";
+            && (header.Slice(0x1a8, 16).SequenceEqual(bitLockerGuid) || header.Slice(0x1a8, 16).SequenceEqual(usedSpaceGuid))) return "bitlocker";
         // PDF allows its marker within 1024 bytes. Prefer exact archive headers over an embedded PDF member.
         if (header[..Math.Min(1024, header.Length)].IndexOf("%PDF-"u8) >= 0) return "pdf";
         return "unknown";

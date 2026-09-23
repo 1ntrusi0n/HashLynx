@@ -7,14 +7,14 @@ HashLynx extracts password-verification material locally and passes it into the 
 | Adapter ID | Input | External dependency | Suggested Hashcat modes |
 | --- | --- | --- | --- |
 | `pdf` | PDF documents | `pdf2john.exe`, `.py`, or `.pl` | PDF revision-dependent modes |
-| `zip` | ZIP/ZIPX archives | None for built-in formats; optional `zip2john.exe` override | 17200 (deflate), 17210 (stored), 13600 (WinZip AES) |
-| `rar` | RAR3/RAR5 archives | None for built-in formats; optional `rar2john.exe` override | 12500, 13000, 23700, 23800 |
-| `7z` | 7-Zip archives | None for built-in formats; optional `7z2john.exe`, `.pl`, or `.py` override | 11600 |
-| `bitlocker` | BitLocker partition images | Hashcat `tools/bitlocker2hashcat.py` and Python 3 | 22100 |
+| `zip` | ZIP/ZIPX archives | None | 17200 (deflate), 17210 (stored), 13600 (WinZip AES) |
+| `rar` | RAR3/RAR5 archives | None | 12500, 13000, 23700, 23800 |
+| `7z` | 7-Zip archives | None | 11600 |
+| `bitlocker` | Raw BitLocker partition images | None | 22100 |
 
 These are suggestions, not proof of a compatible mode. Hashcat remains the identification authority. John output is normalized by removing filename/login fields around the actual token. HashLynx preserves ZIP closing markers, deduplicates repeated tokens, and rejects RAR records that refer to external archive data instead of including it inline.
 
-No John the Ripper binaries or scripts are bundled. The native C# ZIP implementation uses the ZIP specifications and the hash serialization documented in the permissively licensed `zip2john.c`; see [third-party notices](../THIRD_PARTY_NOTICES.md). Obtain external tools separately from their official project and follow their licenses. HashLynx neither downloads dependencies nor changes their source files. The Hashcat-provided BitLocker script remains part of the separately obtained Hashcat installation.
+No John the Ripper binaries or scripts are bundled. The native C# ZIP implementation uses the ZIP specifications and the hash serialization documented in the permissively licensed `zip2john.c`; see [third-party notices](../THIRD_PARTY_NOTICES.md). Obtain external tools separately from their official project and follow their licenses. HashLynx neither downloads dependencies nor changes their source files. BitLocker extraction is implemented in C# using the referenced format and Hashcat hash layout.
 
 ## Built-in ZIP extraction
 
@@ -26,7 +26,7 @@ The extractor selects the smallest supported encrypted member and returns one fu
 
 Limits follow the full-data Hashcat formats: ZipCrypto encrypted member data (including its 12-byte header) must be at most 320 KiB, and AES ciphertext must be less than 8 MiB. Archive size itself is not capped by these member limits. Directory processing is bounded to 100,000 entries and 64 MiB. Empty ZipCrypto members cannot supply full password verification and are skipped. Split volumes, self-extracting containers, PKWARE strong encryption, encrypted central directories, unusual directory extension records, and other ZipCrypto compression methods require another workflow. Missing or inconsistent structural records fail with an explanation; unsupported archives are not silently passed to a discovered executable.
 
-For another ZIP variant, explicitly configure a compatible **zip2john tool path** on the ZIP card and save it. A configured tool replaces the native extractor, preserving existing external-tool configurations. Clear the path and save to return to the built-in implementation. A missing configured executable is reported instead of silently changing implementations. The registry still requires a recognizable ZIP signature; self-extracting containers must first be converted to a conventional ZIP with an appropriate archive utility.
+For unsupported ZIP variants, use a compatible external tool separately and import its Hashcat-compatible hash output. The built-in registry requires a recognizable ZIP signature; self-extracting containers must first be converted to a conventional ZIP with an appropriate archive utility.
 
 ## Built-in RAR extraction
 
@@ -44,15 +44,25 @@ The reader handles simple linear coder chains and solid streams, selecting a sma
 
 Current limits: single-volume standard archives, no AES salt (as required by Hashcat mode 11600), KDF exponent at most 24, encrypted data at most 8 MiB minus 16 bytes, and CRC verification output at most 9,999,999 bytes. Compression dictionaries used for recovery are limited to 64 MiB. Metadata is bounded to 8 MiB, with LZMA metadata dictionaries at most 8 MiB and at most two nested encoded-header layers. Stream/substream counts are bounded to 100,000, and a folder may contain at most four simple coders. Multi-input graphs, BCJ/Delta/other preprocessing filters, unsupported codecs, additional/external metadata streams, self-extracting containers and split archives require another workflow. An external extractor cannot override Hashcat's own codec/format limitations; some archives require a different recovery backend.
 
+## Built-in BitLocker extraction
+
+Select a raw partition image starting at its boot sector in Target Inspector. The reader supports Windows 7+ `-FVE-FS-` and BitLocker To Go `MSWIN4.1` layouts with the standard or used-space-only identifier. It reads metadata block version 2, metadata header version 1, and version-1 VMKs protected by a user password (`0x2000`). Stretch-key methods `0x1000` and `0x1001`, a 16-byte salt, a 12-byte nonce, and 60 bytes of authentication tag plus encrypted VMK are supported.
+
+The reader emits one distinct `$bitlocker$1$` record per supported password protector. Type 1 verifies the full AES-CCM authentication tag, so the weaker type-0 duplicate is not emitted. The extractor only reads metadata; Hashcat performs candidate testing. It never mounts, writes to, unlocks or decrypts the source partition.
+
+Metadata reads are bounded to 1 MiB, 8,192 entries per table and 128 distinct password protectors. Signatures, versions, offsets, sizes, entry boundaries and required properties are validated. If a copy is truncated or structurally invalid, the reader tries the next of the three boot-sector metadata pointers and reports backup use. A structurally valid copy without a supported password protector is authoritative; it never merges older backup protectors into that snapshot. Backup metadata can still describe an older configuration. Extraction alone does not authenticate the entire partition or its metadata; candidate verification checks the extracted key's tag.
+
+Windows Vista, other metadata versions, TPM-only and TPM+PIN protectors, startup keys, recovery passwords, whole-disk images and VHD/VHDX containers are unsupported. Export the relevant partition as a raw image using a suitable tool first. BitLocker does not need Python, the Hashcat script, or a configurable extractor path.
+
 ## Configuration and validation
 
-ZIP, RAR and 7-Zip are built in. Leave their tool paths blank unless deliberately selecting an external override. Existing configured tool paths remain in effect; clear the path and save to switch to native extraction. Missing configured executables are reported rather than silently replaced. No extractor downloads or process launches occur during native extraction.
+ZIP, RAR, 7-Zip and BitLocker are built in and have no configuration cards. Select them in Target Inspector. Legacy tool/interpreter paths for these formats are preserved in settings but ignored by the application registry, so hidden settings cannot unexpectedly launch an external tool. No downloads or process launches occur during native extraction.
 
 Open **Extractors** and configure the tool path on the adapter's card. A tool can be a native `.exe`, Python `.py` script, or Perl `.pl` script. Script adapters also accept an interpreter executable path. HashLynx uses individual process arguments; do not enter a command line or append flags to a path. Batch files and shell executables are rejected.
 
-When a path is not configured, ZIP, RAR and 7-Zip use their built-in implementations; PDF searches `PATH` for its known tool names. The BitLocker adapter looks for `tools/bitlocker2hashcat.py` inside the configured Hashcat directory. Python discovery checks `py.exe`, `python.exe`, then `python3.exe`; the Windows launcher is invoked with `-3`. Perl discovery checks `perl.exe`. An explicit missing path is reported rather than silently replaced by another tool.
+PDF searches PATH for its known tool names when no tool path is configured. Python discovery checks `py.exe`, `python.exe`, then `python3.exe`; the Windows launcher is invoked with `-3`. Perl discovery checks `perl.exe`. An explicitly configured missing PDF path is reported rather than silently replaced by another tool.
 
-For native extractors, **Available** and **Validate** confirm that no dependency is needed. For external adapters, **Available** means the executable was found, or a script and compatible runtime were found. It does not establish that every encrypted format or optional runtime module works. **Validate** runs the tool without a target to obtain usage output; BitLocker uses `--help`. Errors or timeouts are shown as unavailable. A representative encrypted sample is still required for a complete compatibility test.
+For external adapters, **Available** means the executable was found, or a script and compatible runtime were found. It does not establish that every encrypted format or optional runtime module works. **Validate** runs the tool without a target to obtain usage output. Errors or timeouts are shown as unavailable. A representative encrypted sample is still required for a complete compatibility test.
 
 Tool paths are stored in `AppSettings.ExtractorTools` as `ExtractorToolSettings` values keyed by the adapter ID. Application composition maps those persisted values to the extractor library's `ExtractorConfiguration` records and rebuilds the registry after configuration changes. Availability checks use runtime version output when available; a displayed Python or Perl version describes the interpreter, not a separately verified extractor release.
 
@@ -71,7 +81,7 @@ Extraction runs asynchronously and supports cancellation. For external tools, ca
 1. Implement `IHashExtractor` in `HashLynx.Extractors` with a stable unique `Id`, display metadata, extension hints, availability/validation methods, signature matching, and asynchronous extraction.
 2. Return `ExtractionResult` containing normalized hashes, suggested modes, source type, extractor name, metadata, and concise diagnostics. Propagate cancellation. Do not put hashes or recovered passwords in diagnostic text.
 3. Register the implementation in `ExtractorRegistry.CreateDefault`, or provide it to the registry constructor. The UI consumes the interface and does not need format-specific branches.
-4. For external tools, reuse `ExternalHashExtractor` and `IExtractorProcessRunner` where suitable, add parser signatures and mode suggestions, and keep tool acquisition external. A future native BitLocker implementation can implement the same interface.
+4. For external tools, reuse `ExternalHashExtractor` and `IExtractorProcessRunner` where suitable, add parser signatures and mode suggestions, and keep tool acquisition external. Set `IsBuiltIn` for implementations that need no settings so they stay off the configuration page.
 5. Add tests for signatures, misleading extensions, missing dependencies, normalized output, safe argument boundaries, cancellation, and malformed tool output. Record material changes in the changelog.
 
 Normal tests use fake process runners and temporary files. They do not require Hashcat, Python, Perl, John, a GPU, or an encrypted user file. Runtime discovery/help checks are separate from evidence of successful end-to-end extraction.
@@ -92,3 +102,13 @@ For RAR, set `HASHLYNX_TEST_RAR_FIXTURES` to a directory containing these public
 - `test_read_format_rar4_encrypted.rar`, decoded from the `.rar.uu` fixture in [libarchive at a7363f0](https://github.com/libarchive/libarchive/tree/a7363f0f14406a0a7c813f8ecb0733ca640b294e/libarchive/test). This uses traditional RAR3 encryption despite the container-generation name.
 
 Both projects document the synthetic password `password` in their reading/encryption tests. Run `dotnet test tests/HashLynx.Integration.Tests -c Release --filter FullyQualifiedName~PublicRar3AndRar5`. A stored RAR3 case is also synthesized from Hashcat's public mode-23700 self-test vector. Keep downloaded fixtures outside Git (for example under `artifacts/`). Test fixtures are not user data and are never added to the user's session history.
+
+The opt-in BitLocker check uses synthetic partition metadata around Hashcat's public mode-22100 self-test vector. It compares native output against the referenced Python script, then checks Hashcat identification, CPU/device recovery and session plaintext. It is not a validation against a full Windows-created volume. Normal parser tests also cover To Go/used-space layouts, backups, unsupported protectors and malformed metadata.
+
+Set `HASHLYNX_TEST_HASHCAT` to a disposable backend, `HASHLYNX_TEST_DEVICE` to a working device ID, `HASHLYNX_TEST_PYTHON` to Windows `py.exe`, and `HASHLYNX_TEST_BITLOCKER_REFERENCE` to a separately obtained copy of [Hashcat's reference script](https://github.com/hashcat/hashcat/blob/master/tools/bitlocker2hashcat.py). Run:
+
+```powershell
+dotnet test tests/HashLynx.Integration.Tests -c Release --filter FullyQualifiedName~NativeBitLocker
+```
+
+No test downloads dependencies, uses a live disk, or changes BitLocker settings.

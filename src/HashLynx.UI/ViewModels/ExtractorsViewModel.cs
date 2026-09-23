@@ -63,7 +63,7 @@ public sealed class ExtractorsViewModel(AppServices services) : ObservableObject
         try
         {
             services.RebuildExtractors(); Extractors.Clear();
-            foreach (var extractor in services.Extractors.All)
+            foreach (var extractor in services.Extractors.All.Where(extractor => !extractor.IsBuiltIn))
             {
                 var row = new ExtractorViewModel(services, extractor); Extractors.Add(row); await row.RefreshAsync(false);
             }

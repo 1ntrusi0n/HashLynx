@@ -34,6 +34,7 @@ public interface IHashExtractor
     string DisplayName { get; }
     string Description { get; }
     string ImplementationType { get; }
+    bool IsBuiltIn => false;
     IReadOnlyList<string> SupportedExtensions { get; }
     Task<ExtractorAvailability> GetAvailabilityAsync(CancellationToken cancellationToken = default);
     Task<ExtractorAvailability> ValidateAsync(CancellationToken cancellationToken = default);

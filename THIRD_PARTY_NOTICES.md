@@ -4,13 +4,13 @@ HashLynx is an independent application. Hashcat is a separate third-party projec
 
 ## Hashcat
 
-[Hashcat](https://hashcat.net/hashcat/) is an MIT-licensed backend. Users separately obtain an official release and configure it. The local `hashcat/` folder is ignored by Git and is not included in this repository or the application publish output. Hashcat's own `docs/license.txt` and `docs/license_libs/` contain its copyright and dependency notices; do not remove or replace them. The BitLocker adapter invokes the user's existing Hashcat-supplied script without copying or modifying its implementation.
+[Hashcat](https://hashcat.net/hashcat/) is an MIT-licensed backend. Users separately obtain an official release and configure it. The local `hashcat/` folder is ignored by Git and is not included in this repository or the application publish output. Hashcat's own `docs/license.txt` and `docs/license_libs/` contain its copyright and dependency notices; do not remove or replace them.
 
 ## External extractors
 
 John the Ripper and utilities such as pdf2john, zip2john, rar2john, and 7z2john are optional external programs. Some are GPL-licensed and may have additional component licenses. Obtain and review the license for the exact tool/version you use. HashLynx does not redistribute them or their source. Python and Perl runtimes also remain separately installed tools with their own licenses.
 
-HashLynx's MIT license does not relicense any external software. Process adapters and output parsers in this repository are HashLynx code. PDF and BitLocker extraction implementations remain external; ZIP, RAR and 7-Zip have native implementations described below.
+HashLynx's MIT license does not relicense any external software. Process adapters and output parsers in this repository are HashLynx code. PDF extraction remains external; ZIP, RAR, 7-Zip and BitLocker have native implementations described below.
 
 ## Native ZIP extractor references
 
@@ -45,6 +45,36 @@ The native 7z reader is an original implementation of the [7z format specificati
 A small C# LZMA decoder subset from **LZMA SDK 26.03**, by **Igor Pavlov**, is included for compressed archive metadata. **LZMA SDK is written and placed in the public domain by Igor Pavlov.** The SDK is separate from the LGPL 7-Zip application. See [source provenance and scope](src/HashLynx.Extractors/ThirdParty/LzmaSdk/README.md) and the [official SDK license](https://www.7-zip.org/sdk.html). HashLynx adds a bounded, cancellable wrapper; it does not bundle the 7-Zip executable or unRAR library.
 
 Optional RAR integration tests use public known-password fixtures from the `rarfile` and `libarchive` test suites; those downloaded archives remain outside the repository and publish output. The stored RAR3 test uses Hashcat's public mode-23700 self-test data. Normal 7z fixtures are locally generated synthetic archives with a documented test password.
+
+## Native BitLocker extractor
+
+The C# BitLocker reader follows the metadata fields and hash serialization in Hashcat's [bitlocker2hashcat.py](https://github.com/hashcat/hashcat/blob/master/tools/bitlocker2hashcat.py), consulted September 23, 2026, and the format documented by [libbde](https://github.com/libyal/libbde/blob/main/documentation/BitLocker%20Drive%20Encryption%20(BDE)%20format.asciidoc). The implementation adds bounded reads, structural validation, backup handling, cancellation and authenticated-only output. No Python runtime or script is distributed. No libbde implementation or document text is copied into the app.
+
+The synthetic test fixture uses Hashcat's public [mode-22100 self-test vector](https://github.com/hashcat/hashcat/blob/master/src/modules/module_22100.c). Hashcat's license notice for these references is retained here:
+
+```text
+The MIT License (MIT)
+
+Copyright (c) 2015-2026 Jens Steube
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
 
 ## Rule presets and starter wordlist
 

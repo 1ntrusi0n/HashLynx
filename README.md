@@ -17,7 +17,7 @@ HashLynx is an independent GUI frontend. Hashcat is a separate third-party proje
 - Automatic validation when starting recovery, with run options, a copyable command preview, and a separate Preflight button in Expert mode. Commands execute with `ProcessStartInfo.ArgumentList`, never through a shell.
 - Asynchronous jobs, parsed JSON status metrics, stop, job history, interrupted-job detection, and restore when a saved Hashcat restore file exists.
 - Session-specific recovered results, an all-sessions view, plaintext hide/reveal, copy, and export. Hardware discovery and refresh use Hashcat's backend information.
-- An extensible extractor registry and manager for PDF, ZIP, RAR, 7-Zip, and BitLocker. ZIP, RAR and 7-Zip work without external tools; missing dependencies for other formats are shown as unavailable. Tool/interpreter locations are configurable and persisted.
+- An extensible extractor registry for PDF, ZIP, RAR, 7-Zip, and BitLocker. ZIP, RAR, 7-Zip and BitLocker are built in. The Extractors page only shows external tools that need configuration (currently PDF).
 - Attack profile save/load/delete, per-user JSON persistence with atomic writes, sanitized structured diagnostics, and a Windows build/test workflow.
 
 ## Target Inspector
@@ -124,23 +124,23 @@ Pause/resume/checkpoint controls are disabled unless the backend's interactive t
 
 ## Extractors
 
-The manager shows every registered extractor and its dependency status. Configure executable or script paths and, for scripts, the interpreter. Validation checks tool availability; extraction is a separate explicit operation.
+The Extractors page shows only formats that need an external tool (currently PDF). Built-in formats need no settings and are selected through Target Inspector. Legacy tool paths for built-in formats remain stored but no longer override native extraction.
 
 | Family | Adapter | Required separately |
 | --- | --- | --- |
 | PDF | External pdf2john | Compatible tool; Python or Perl if a script |
-| ZIP | Built-in ZipCrypto and WinZip AES; optional zip2john override | None for built-in formats |
-| RAR | Built-in RAR3/RAR5; optional rar2john override | None for built-in formats |
-| 7-Zip | Built-in AES with Copy/LZMA/LZMA2/Deflate; optional 7z2john override | None for built-in formats |
-| BitLocker | Hashcat-supplied bitlocker2hashcat.py | Script in the configured release and Python 3 |
+| ZIP | Built-in ZipCrypto and WinZip AES | None |
+| RAR | Built-in RAR3/RAR5 | None |
+| 7-Zip | Built-in AES with Copy/LZMA/LZMA2/Deflate | None |
+| BitLocker | Built-in user-password protector reader | None |
 
 Header inspection and extension checks guide selection. Adapter results normalize supported John output into hash strings and feed the normal identification workflow. Suggested modes are hints, not a replacement for Hashcat identification. External tool output formats may differ by release; unsupported or failed output is diagnosed rather than presented as successful extraction.
 
-ZIP works immediately with an empty tool path. It supports stored/deflated ZipCrypto, AES-128/192/256, ZIP64 and data descriptors. It selects the smallest supported encrypted member; recovery verifies that member, since other members may have different passwords. Full-data limits are 320 KiB per ZipCrypto member and less than 8 MiB of AES ciphertext. Unsupported variants can use an explicitly configured external zip2john tool. Clear its path to return to the built-in extractor. Target Inspector retains extraction notes and selects a uniquely suggested mode only after Hashcat confirms it.
+ZIP works immediately without configuration. It supports stored/deflated ZipCrypto, AES-128/192/256, ZIP64 and data descriptors. It selects the smallest supported encrypted member; recovery verifies that member, since other members may have different passwords. Full-data limits are 320 KiB per ZipCrypto member and less than 8 MiB of AES ciphertext. Target Inspector retains extraction notes and selects a uniquely suggested mode only after Hashcat confirms it.
 
-RAR and 7-Zip also work with empty tool paths. RAR supports RAR3 encrypted headers and stored/compressed members, and RAR5 password verifiers. 7-Zip supports encrypted headers, compressed metadata, and ordinary or solid encrypted streams using Copy, LZMA, LZMA2 or Deflate. They read archives locally without unpacking files. Size limits and unsupported variants produce actionable diagnostics; explicit external tool overrides remain available. See [format coverage and limits](docs/extractors.md).
+RAR and 7-Zip also work without configuration. RAR supports RAR3 encrypted headers and stored/compressed members, and RAR5 password verifiers. 7-Zip supports encrypted headers, compressed metadata, and ordinary or solid encrypted streams using Copy, LZMA, LZMA2 or Deflate. They read archives locally without unpacking files. Unsupported variants produce diagnostics. To use another extractor, run it separately and import its Hashcat-compatible output through Hash File. See [format coverage and limits](docs/extractors.md).
 
-BitLocker initially supports partition images recognized at offset zero with a user-password protector. TPM-only protectors, recovery-password cracking, and automatic whole-disk partition offset discovery are not implemented. See [extractor details](docs/extractors.md) for configuration, format support, and extension guidance, and [third-party notices](THIRD_PARTY_NOTICES.md) for the native archive format references. No John binaries or scripts are redistributed.
+BitLocker reads raw Windows 7+ partition images with a user-password protector, including BitLocker To Go and used-space-only layouts. It needs no Python or external script. It emits authenticated type-1 records for mode 22100 and can use a backup when primary metadata is damaged. It does not mount or decrypt disks. TPM/PIN protectors, recovery-password cracking, Vista metadata and automatic whole-disk partition discovery are unsupported. See [extractor details](docs/extractors.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
 
 ## Privacy, data, and diagnostics
 
@@ -171,7 +171,7 @@ These files are **not encrypted by HashLynx**. Result files and potfiles contain
 | `src/HashLynx.UI` | WPF views, view models, navigation, themes, dialogs, application composition |
 | `src/HashLynx.Core` | Domain/job/profile models, mask validation, streaming file inspection |
 | `src/HashLynx.Hashcat` | Discovery/capabilities, command construction, preflight, process execution, status/catalog/device/result parsers |
-| `src/HashLynx.Extractors` | `IHashExtractor`, registry, native ZIP/RAR/7z readers, header inspection, external adapters, dependency checks |
+| `src/HashLynx.Extractors` | `IHashExtractor`, registry, native ZIP/RAR/7z/BitLocker readers, header inspection, external adapters, dependency checks |
 | `src/HashLynx.Persistence` | Per-user paths, atomic JSON stores, structured logging |
 | `tests/` | xUnit unit tests, opt-in backend integration checks, WPF smoke harness |
 | `assets/branding` | PNG resources and multi-size ICO |
@@ -192,6 +192,8 @@ dotnet test tests/HashLynx.Integration.Tests -c Release --filter Category=Integr
 This is an integration check, not a claim of recovery support on every driver. Local validation used Hashcat **v7.1.2**. Its initial Intel runtime failed; after an explicitly approved Intel CPU runtime 2026.0 installation, known-answer MD5 and NTLM CPU recovery passed, including the WPF Start → Jobs → Results flow. The legacy GPU and interactive controls remain unverified. No warning-suppression flags were used. Native ZIP extraction, Hashcat identification, CPU recovery, and session result reading also passed for real 7-Zip-generated stored/deflated ZipCrypto and AES-128/192/256 fixtures.
 
 The same extraction → identification → CPU recovery → session password checks passed for six RAR cases (RAR3 stored/compressed members and encrypted headers; RAR5 encrypted headers and file verifiers with CRC32/BLAKE2 file checksums) and six 7z cases (encrypted headers, Copy/LZMA/LZMA2/Deflate, and a multi-file solid stream with compressed metadata). Broader archive-producer and hardware coverage is still needed. See [archive test instructions](docs/extractors.md) for the optional encrypted-archive checks.
+
+Native BitLocker output also matched Hashcat's reference script, and identification, CPU recovery and session result reading passed using synthetic partition metadata around the public mode-22100 self-test vector. Full Windows-created volume validation remains outstanding.
 
 Run `dotnet run --project tests/HashLynx.UI.Smoke -c Release -- artifacts/ui-smoke` for isolated missing-backend startup, all page/template loading, attack/input/theme layouts, Basic/Expert control visibility, bundled content, legacy/custom profiles, populated manual-catalog expansion/selection/scrolling, and WPF binding checks. With `HASHLYNX_TEST_HASHCAT` set, it also checks catalog search, automatic validation, and preset command generation. Screenshots and the pass/fail report stay under the ignored artifacts directory. CI also runs this harness.
 

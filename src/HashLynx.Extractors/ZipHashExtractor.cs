@@ -14,8 +14,9 @@ public sealed class ZipHashExtractor : IHashExtractor
 
     public string Id => "zip";
     public string DisplayName => "ZIP";
-    public string Description => "Built-in ZipCrypto and WinZip AES extraction. Leave the tool path blank to use it, or configure zip2john for other variants.";
+    public string Description => "Built-in ZipCrypto and WinZip AES extraction.";
     public string ImplementationType => _external?.ImplementationType ?? "Built-in ZIP extractor";
+    public bool IsBuiltIn => _external is null;
     public IReadOnlyList<string> SupportedExtensions => [".zip", ".zipx"];
     public Task<ExtractorAvailability> GetAvailabilityAsync(CancellationToken cancellationToken = default)
     {
@@ -55,7 +56,7 @@ public sealed class ZipHashExtractor : IHashExtractor
     private static ExtractionResult Failure(string message) => new()
     {
         ExtractorName = "Built-in ZIP", SourceFileType = "zip",
-        Diagnostics = [message, "For unsupported ZIP variants, configure an external zip2john tool under Extractors. Clear that path to return to the built-in extractor."]
+        Diagnostics = [message, "For unsupported ZIP variants, use a compatible external zip2john extractor separately, then import its Hashcat-compatible output as a hash file."]
     };
 
     // ZIP layout: PKWARE APPNOTE; AES layout: WinZip AE-1/AE-2 specification.

@@ -15,6 +15,8 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ### Added
 
+- Built-in BitLocker password-protector extraction from raw Windows 7+ partition images, including To Go and used-space-only layouts. Emits authenticated mode-22100 hashes without Python; validates bounded metadata and reports backup use and unsupported protectors.
+- Extractors now shows only external formats needing settings (currently PDF). ZIP, RAR, 7-Zip and BitLocker use native readers automatically; legacy native-format tool paths remain stored but no longer override extraction.
 - Persistent wordlist library: add or drop multiple files once, then select saved lists for Dictionary, Hybrid and Combinator attacks. Basic mode selects one list; Expert mode retains ordered multiple-list inputs. Forgetting entries keeps source files, missing files remain visible, and failed saves or invalid library data are preserved and reported.
 - Native RAR3/RAR5 and 7-Zip extractors with explicit external-tool overrides. RAR supports encrypted headers, stored/independent compressed members and RAR5 password verifiers; 7z supports encrypted headers, LZMA metadata, Copy/LZMA/LZMA2/Deflate streams and combined solid-stream CRC verification.
 - Bounded archive parsing, CRC and verifier validation, cancellation and malformed-input tests; real known-password archive recovery checks. The public-domain LZMA SDK decoder subset reads compressed 7z metadata without Perl or an installed archive tool.

@@ -8,7 +8,7 @@ public sealed class RarHashExtractor(ExtractorConfiguration? configuration = nul
 {
     public override string Id => "rar";
     public override string DisplayName => "RAR";
-    public override string Description => "Built-in RAR3 and RAR5 extraction, including encrypted headers. Leave the tool path blank, or configure rar2john for other variants.";
+    public override string Description => "Built-in RAR3 and RAR5 extraction, including encrypted headers.";
     public override IReadOnlyList<string> SupportedExtensions => [".rar"];
 
     protected override async Task<ExtractionResult> ExtractNativeAsync(FileStream stream, CancellationToken ct)

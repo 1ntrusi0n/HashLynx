@@ -8,5 +8,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\HashLynx.UI\HashLynx.UI.csproj" />
     <Compile Include="..\HashLynx.Extractors.Tests\NativeArchiveFixtures.cs" Link="Fixtures\NativeArchiveFixtures.cs" />
+    <Compile Include="..\HashLynx.Extractors.Tests\BitLockerFixture.cs" Link="Fixtures\BitLockerFixture.cs" />
   </ItemGroup>
 </Project>

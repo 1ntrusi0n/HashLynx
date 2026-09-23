@@ -27,9 +27,10 @@ public sealed class ExtractorRegistry
     {
         ExtractorConfiguration? Config(string id) => configurations?.TryGetValue(id, out var configuration) == true ? configuration : null;
         return new([
-            new PdfHashExtractor(Config("pdf"), runner), new ZipHashExtractor(Config("zip"), runner),
-            new RarHashExtractor(Config("rar"), runner), new SevenZipHashExtractor(Config("7z"), runner),
-            new BitLockerHashExtractor(hashcatDirectory, Config("bitlocker"), runner)
+            // Built-in formats always use native readers. Preserve old configuration in storage,
+            // but do not let an invisible legacy tool path override them.
+            new PdfHashExtractor(Config("pdf"), runner), new ZipHashExtractor(),
+            new RarHashExtractor(), new SevenZipHashExtractor(), new BitLockerHashExtractor()
         ]);
     }
 }

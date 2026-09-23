@@ -12,11 +12,13 @@ public abstract class NativeArchiveExtractor : IHashExtractor
     public abstract string Description { get; }
     public abstract IReadOnlyList<string> SupportedExtensions { get; }
     public string ImplementationType => _external?.ImplementationType ?? $"Built-in {DisplayName} extractor";
+    public bool IsBuiltIn => _external is null;
+    protected virtual string UnsupportedGuidance => "For unsupported variants, use a compatible external extractor separately, then import its Hashcat-compatible output as a hash file.";
     public Task<ExtractorAvailability> GetAvailabilityAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         return _external?.GetAvailabilityAsync(cancellationToken) ?? Task.FromResult(new ExtractorAvailability
-        { IsAvailable = true, Version = "Built-in v1", Diagnostic = "Ready without additional tools. Leave the tool path blank for built-in extraction." });
+        { IsAvailable = true, Version = "Built-in v1", Diagnostic = "Ready without additional tools or configuration." });
     }
     public Task<ExtractorAvailability> ValidateAsync(CancellationToken cancellationToken = default) =>
         _external?.ValidateAsync(cancellationToken) ?? GetAvailabilityAsync(cancellationToken);
@@ -37,7 +39,7 @@ public abstract class NativeArchiveExtractor : IHashExtractor
             }
             catch (InvalidDataException ex) { return Failure(ex.Message); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or OverflowException)
-            { return Failure("The archive could not be read or contains invalid offsets. Check that it is complete and accessible."); }
+            { return Failure("The file could not be read or contains invalid offsets. Check that it is complete and accessible."); }
         }, cancellationToken);
     protected abstract Task<ExtractionResult> ExtractNativeAsync(FileStream stream, CancellationToken cancellationToken);
     protected ExtractionResult Success(string hash, int mode, string notice) => new()
@@ -48,7 +50,7 @@ public abstract class NativeArchiveExtractor : IHashExtractor
     private ExtractionResult Failure(string message) => new()
     {
         SourceFileType = Id, ExtractorName = $"Built-in {DisplayName}",
-        Diagnostics = [message, $"For unsupported variants, configure an external {(Id == "rar" ? "rar2john" : "7z2john")} tool under Extractors. Clear that path to restore built-in extraction."]
+        Diagnostics = [message, UnsupportedGuidance]
     };
 }
 

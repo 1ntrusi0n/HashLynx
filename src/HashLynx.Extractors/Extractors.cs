@@ -35,21 +35,3 @@ internal sealed class ExternalSevenZipHashExtractor(ExtractorConfiguration? conf
     public override string Description => "7-Zip archives using an externally supplied 7z2john tool and its required runtime modules.";
     public override IReadOnlyList<string> SupportedExtensions => [".7z"];
 }
-
-public sealed class BitLockerHashExtractor : ExternalHashExtractor
-{
-    public BitLockerHashExtractor(string? hashcatDirectory = null, ExtractorConfiguration? configuration = null, IExtractorProcessRunner? runner = null)
-        : base(ResolveConfiguration(hashcatDirectory, configuration), runner) { }
-    public override string Id => "bitlocker";
-    public override string DisplayName => "BitLocker";
-    public override string Description => "Hashcat's bitlocker2hashcat.py and Python 3; supports user-password protectors on partition images.";
-    public override string ImplementationType => "Hashcat-supplied Python adapter";
-    public override IReadOnlyList<string> SupportedExtensions => [".img", ".dd", ".bin", ".raw", ".vhd"];
-
-    private static ExtractorConfiguration ResolveConfiguration(string? directory, ExtractorConfiguration? configuration)
-    {
-        configuration ??= new();
-        if (!string.IsNullOrWhiteSpace(configuration.ToolPath) || string.IsNullOrWhiteSpace(directory)) return configuration;
-        return configuration with { ToolPath = Path.Combine(directory, "tools", "bitlocker2hashcat.py") };
-    }
-}

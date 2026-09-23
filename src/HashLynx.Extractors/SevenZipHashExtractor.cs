@@ -7,7 +7,7 @@ public sealed class SevenZipHashExtractor(ExtractorConfiguration? configuration 
 {
     public override string Id => "7z";
     public override string DisplayName => "7-Zip";
-    public override string Description => "Built-in 7z AES extraction, including encrypted and LZMA-compressed headers. Leave the tool path blank, or configure 7z2john for other variants.";
+    public override string Description => "Built-in 7z AES extraction, including encrypted and LZMA-compressed headers.";
     public override IReadOnlyList<string> SupportedExtensions => [".7z"];
     protected override async Task<ExtractionResult> ExtractNativeAsync(FileStream stream, CancellationToken cancellationToken)
     {
