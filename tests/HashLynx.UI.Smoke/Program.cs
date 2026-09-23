@@ -68,6 +68,7 @@ internal sealed class SmokeApplication(string output) : Application
             }
 
             await CheckSimpleWorkflowAsync(shell, store, window);
+            await CheckWordlistLibraryAsync(shell, services, store, window);
             await CheckDefaultDeviceAsync(shell, store, window);
             await CheckManualCatalogAsync(shell, window, true);
             await CheckPopulatedJobsAsync(shell, window);
@@ -116,7 +117,7 @@ internal sealed class SmokeApplication(string output) : Application
             }
             listener.Flush();
             Require(errors.Length == 0, "WPF binding failures: " + errors);
-            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all six pages; four attack families; three target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; populated manual catalog expansion, selection and scrolling; populated running/failed Jobs with progress updates; inactive history deletion, Undo, file retention and save-failure rollback; saved Hardware default, Basic selection, Expert overrides, restart persistence; preflight error handling; built-in ZIP/RAR/7z availability and explicit-tool override switching; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, automatic result loading, View recovered passwords navigation/reveal, stale-result clearing, native ZIP/RAR/7z extraction, confirmed automatic mode selection, and persistent extraction notes passed." : "") + (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice) ? " Real recovery: Start → Jobs → Results recovered the known NTLM fixture in Basic mode with the starter list, Normal preset, and saved Hardware default." : ""));
+            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all six pages; four attack families; three target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; saved wordlist import, restart, selection, Combinator/Hybrid, deduplication, missing files, safe removal and failed/corrupt save handling; populated manual catalog expansion, selection and scrolling; populated running/failed Jobs with progress updates; inactive history deletion, Undo, file retention and save-failure rollback; saved Hardware default, Basic selection, Expert overrides, restart persistence; preflight error handling; built-in ZIP/RAR/7z availability and explicit-tool override switching; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, automatic result loading, View recovered passwords navigation/reveal, stale-result clearing, native ZIP/RAR/7z extraction, confirmed automatic mode selection, and persistent extraction notes passed." : "") + (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice) ? " Real recovery: Start → Jobs → Results recovered the known NTLM fixture in Basic mode with the starter list, Normal preset, and saved Hardware default." : ""));
             Console.WriteLine("WPF smoke passed. Screenshots and report: " + output);
             Shutdown(0);
         }
@@ -128,6 +129,91 @@ internal sealed class SmokeApplication(string output) : Application
             Shutdown(1);
         }
         finally { PresentationTraceSources.DataBindingSource.Listeners.Remove(listener); }
+    }
+
+    private async Task CheckWordlistLibraryAsync(ShellViewModel shell, AppServices services, PersistenceStore store, Window window)
+    {
+        var attack = shell.Attack;
+        var first = Path.Combine(store.Paths.Root, "first words-é.txt");
+        var second = Path.Combine(store.Paths.Root, "second words.txt");
+        await File.WriteAllTextAsync(first, "synthetic-one");
+        await File.WriteAllTextAsync(second, "synthetic-two");
+        attack.Expert = false;
+        await ((AsyncCommand)attack.DropWordlistsCommand).ExecuteAsync(new[] { first, second, first.ToUpperInvariant() });
+        Require(attack.SavedWordlists.Count == 2 && attack.Wordlists.SequenceEqual(new[] { first }), "Basic import must remember all paths without running every list or creating duplicates.");
+        Require((await store.LoadWordlistLibraryAsync()).Paths.SequenceEqual(new[] { first, second }), "Wordlists must be saved immediately.");
+        shell.Selected = shell.Navigation[0];
+        await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        var picker = Find<ComboBox>(window, "SavedWordlistPicker");
+        picker.SelectedItem = second;
+        Require(attack.Wordlists.SequenceEqual(new[] { second }), "Choosing a saved list in the real dropdown must change the Basic attack.");
+        attack.ProfileName = "Saved wordlist smoke";
+        await ((AsyncCommand)attack.SaveProfileCommand).ExecuteAsync(null);
+        Require((await store.LoadProfilesAsync()).Single().Configuration.Attack.Wordlists.SequenceEqual(new[] { second }), "The attack builder must receive the selected saved path, not every library entry.");
+        attack.SelectedProfile = attack.Profiles.Single();
+        await ((AsyncCommand)attack.DeleteProfileCommand).ExecuteAsync(null);
+        var scroll = Find<ScrollViewer>(window, "AttackScrollViewer");
+        scroll.ScrollToVerticalOffset(scroll.VerticalOffset + picker.TranslatePoint(new Point(0, 0), scroll).Y - 100);
+        await RenderAsync(window, "Saved-wordlists");
+        var restarted = new AttackViewModel(new AppServices(store), shell.Jobs, () => { });
+        await restarted.InitializeAsync();
+        Require(restarted.SavedWordlists.SequenceEqual(attack.SavedWordlists), "The saved library must survive a new view model and store read.");
+        restarted.SelectedSavedWordlist = first;
+        Require(restarted.Wordlists.SequenceEqual(new[] { first }), "A reloaded entry must select the original path.");
+        attack.Family = 3;
+        await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        Find<ComboBox>(window, "SavedLeftWordlistPicker").SelectedItem = first;
+        Find<ComboBox>(window, "SavedRightWordlistPicker").SelectedItem = second;
+        Require(attack.LeftWordlist == first && attack.RightWordlist == second, "Combinator must use saved paths independently on each side.");
+        attack.Family = 2;
+        picker.SelectedItem = first;
+        Require(attack.Wordlists.SequenceEqual(new[] { first }), "Hybrid must use the same saved library.");
+        attack.Family = 0;
+        picker.SelectedItem = second;
+        attack.Expert = true;
+        picker.SelectedItem = first;
+        Require(attack.Wordlists.SequenceEqual(new[] { second, first }), "Expert selection must append to the ordered attack list.");
+        attack.SelectedWordlist = second;
+        attack.RemoveWordlistCommand.Execute(null);
+        Require(attack.SavedWordlists.Count == 2 && attack.Wordlists.SequenceEqual(new[] { first }), "Removing an attack input must keep the saved entry.");
+
+        // Failed saves must not falsely update the library or the attack selection.
+        var libraryFile = Path.Combine(store.Paths.Root, "wordlists.json");
+        var backup = libraryFile + ".smoke-backup";
+        File.Move(libraryFile, backup);
+        Directory.CreateDirectory(libraryFile);
+        try
+        {
+            await ((AsyncCommand)attack.ForgetWordlistCommand).ExecuteAsync(null);
+            Require(attack.SavedWordlists.Count == 2, "A failed removal save must preserve the library entry.");
+            var third = Path.Combine(store.Paths.Root, "third.words");
+            await File.WriteAllTextAsync(third, "synthetic-three");
+            await ((AsyncCommand)attack.DropWordlistsCommand).ExecuteAsync(new[] { third });
+            Require(attack.SavedWordlists.Count == 2 && attack.Wordlists.SequenceEqual(new[] { first }), "A failed import save must preserve library and current attack.");
+        }
+        finally { Directory.Delete(libraryFile); File.Move(backup, libraryFile); }
+        await ((AsyncCommand)attack.ForgetWordlistCommand).ExecuteAsync(null);
+        Require(attack.SavedWordlists.SequenceEqual(new[] { second }) && File.Exists(first) && attack.Wordlists.SequenceEqual(new[] { first }), "Forgetting must keep the source file and current attack.");
+        File.Move(second, second + ".moved");
+        attack.Expert = false;
+        picker.SelectedItem = second;
+        Require(attack.Wordlists.SequenceEqual(new[] { second }) && attack.WordlistSummary.Contains("missing"), "A missing saved file must be identified without silently using a different list.");
+        Require((await store.LoadWordlistLibraryAsync()).Paths.SequenceEqual(new[] { second }), "Missing wordlists must remain in the library.");
+        window.Width = 1040; window.Height = 700;
+        window.UpdateLayout();
+        scroll.ScrollToVerticalOffset(scroll.VerticalOffset + picker.TranslatePoint(new Point(0, 0), scroll).Y - 50);
+        await RenderAsync(window, "Saved-wordlists-missing-narrow");
+        window.Width = 1380; window.Height = 920;
+        await ((AsyncCommand)attack.ForgetWordlistCommand).ExecuteAsync(null);
+        await File.WriteAllTextAsync(libraryFile, "{broken");
+        var corrupt = new AttackViewModel(new AppServices(store), shell.Jobs, () => { });
+        await corrupt.InitializeAsync();
+        await ((AsyncCommand)corrupt.DropWordlistsCommand).ExecuteAsync(new[] { first });
+        Require(await File.ReadAllTextAsync(libraryFile) == "{broken" && corrupt.SavedWordlists.Count == 0, "A corrupt library must not be overwritten by an import.");
+        await store.SaveWordlistLibraryAsync(new WordlistLibrary());
+        await ((AsyncCommand)attack.UseStarterCommand).ExecuteAsync(null);
+        scroll.ScrollToTop();
+        services.Notice = "Saved wordlist library checks passed.";
     }
 
     private async Task CheckZipConfigurationAsync(ShellViewModel shell, Window window)

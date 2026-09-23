@@ -20,6 +20,48 @@ public sealed class PersistenceTests : IDisposable
     }
 
     [Fact]
+    public async Task WordlistLibraryRemembersMissingFilesAndDeduplicatesWindowsPaths()
+    {
+        var store = CreateStore();
+        Assert.Empty((await store.LoadWordlistLibraryAsync()).Paths);
+        var missing = Path.Combine(root, "words with spaces-é.txt");
+        await store.SaveWordlistLibraryAsync(new WordlistLibrary { Paths = [missing, missing.ToUpperInvariant()] });
+        Assert.Equal(missing, Assert.Single((await CreateStore().LoadWordlistLibraryAsync()).Paths));
+        Assert.False(File.Exists(missing));
+        Assert.Empty(Directory.GetFiles(root, "*.tmp"));
+    }
+
+    [Theory]
+    [InlineData("{broken")]
+    [InlineData("{\"SchemaVersion\":999}")]
+    [InlineData("{\"Paths\":null}")]
+    [InlineData("{\"Paths\":[null]}")]
+    [InlineData("{\"Paths\":[\"relative.txt\"]}")]
+    public async Task UnreadableWordlistLibraryIsPreserved(string json)
+    {
+        var store = CreateStore();
+        var path = Path.Combine(root, "wordlists.json");
+        await File.WriteAllTextAsync(path, json);
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.LoadWordlistLibraryAsync());
+        Assert.Equal(json, await File.ReadAllTextAsync(path));
+    }
+
+    [Fact]
+    public async Task CancelledWordlistSavePreservesLibraryAndReferencedFiles()
+    {
+        var store = CreateStore();
+        var words = Path.Combine(root, "synthetic.words");
+        await File.WriteAllTextAsync(words, "test-word");
+        await store.SaveWordlistLibraryAsync(new WordlistLibrary { Paths = [words] });
+        using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.SaveWordlistLibraryAsync(new WordlistLibrary(), cancellation.Token));
+        Assert.Equal(words, Assert.Single((await store.LoadWordlistLibraryAsync()).Paths));
+        await store.SaveWordlistLibraryAsync(new WordlistLibrary());
+        Assert.Empty((await store.LoadWordlistLibraryAsync()).Paths);
+        Assert.Equal("test-word", await File.ReadAllTextAsync(words));
+    }
+
+    [Fact]
     public async Task SettingsRoundTripUnicodePathsAndExtractorConfiguration()
     {
         var store = CreateStore();

@@ -15,7 +15,7 @@ public sealed record RulePresetChoice(string? Id, string DisplayName, string Des
     public override string ToString() => DisplayName;
 }
 
-public sealed class AttackViewModel : ObservableObject
+public sealed partial class AttackViewModel : ObservableObject
 {
     private readonly AppServices _services;
     private readonly JobsViewModel _jobs;
@@ -58,9 +58,9 @@ public sealed class AttackViewModel : ObservableObject
     public string PresetSummary => SelectedRulePreset.Description;
     public string PresetEffort => SelectedRulePreset.Effort;
     public string StartFeedback { get => _startFeedback; set => Set(ref _startFeedback, value); }
-    public string WordlistButtonLabel => Expert ? "Add wordlists…" : "Choose wordlist…";
+    public string WordlistButtonLabel => "Add wordlists…";
     public bool HasLocalWordlist => _localFullWordlist is not null;
-    public string WordlistSummary => Wordlists.Count == 0 ? "Choose a wordlist or use the built-in starter list." : Wordlists.Count == 1 && Wordlists[0] == _starterWordlist ? "Built-in starter · 848 example words. Choose a suitable personal wordlist for broader coverage." : Wordlists.Count == 1 && Wordlists[0] == _localFullWordlist ? "Local full wordlist selected. Larger lists take longer, especially with heavier rule presets." : $"{Wordlists.Count} wordlist(s) selected. Each line supplies a starting word.";
+    public string WordlistSummary => Wordlists.Any(path => !File.Exists(path)) ? "A selected wordlist is missing or unavailable. Reconnect its drive, add its new location, or choose another list before starting." : Wordlists.Count == 0 ? "Choose a wordlist or use the built-in starter list." : Wordlists.Count == 1 && Wordlists[0] == _starterWordlist ? "Built-in starter · 848 example words. Choose a suitable personal wordlist for broader coverage." : Wordlists.Count == 1 && Wordlists[0] == _localFullWordlist ? "Local full wordlist selected. Larger lists take longer, especially with heavier rule presets." : $"{Wordlists.Count} wordlist(s) selected. Each line supplies a starting word.";
     public string Preview { get => _preview; set => Set(ref _preview, value); }
     public string Preflight { get => _preflight; set => Set(ref _preflight, value); }
     public string AttackErrors { get => _attackErrors; set => Set(ref _attackErrors, value); }
@@ -127,9 +127,9 @@ public sealed class AttackViewModel : ObservableObject
         RulePresets = [new(null, "No Rules", "Try the words exactly as they appear in your wordlist.", "One candidate per input word, with no rule transformations."),
             .. _rulePresets.Presets.Select(preset => new RulePresetChoice(preset.Id, preset.DisplayName, preset.Description, $"{preset.CandidateCountLabel} · {preset.Coverage}"))];
         _selectedRulePreset = RulePresets[0];
-        Wordlists.CollectionChanged += (_, _) => Raise(nameof(WordlistSummary));
-        AddWordlistsCommand = new RelayCommand(_ => SelectWordlists(services.Dialogs.OpenFiles(Expert ? "Add wordlists" : "Choose a wordlist", Expert)));
-        DropWordlistsCommand = new RelayCommand(files => { if (files is string[] paths) SelectWordlists(paths); });
+        Wordlists.CollectionChanged += (_, _) => { Raise(nameof(WordlistSummary)); SyncSavedWordlistSelection(); };
+        AddWordlistsCommand = new AsyncCommand(_ => AddWordlistsAsync(services.Dialogs.OpenFiles("Add wordlists to your saved library", true)), services.ReportError);
+        DropWordlistsCommand = new AsyncCommand(files => files is string[] paths ? AddWordlistsAsync(paths) : Task.CompletedTask, services.ReportError);
         RemoveWordlistCommand = new RelayCommand(_ => { if (SelectedWordlist is { } item) Wordlists.Remove(item); });
         MoveWordlistUpCommand = new RelayCommand(_ => MoveWordlist(-1)); MoveWordlistDownCommand = new RelayCommand(_ => MoveWordlist(1));
         AddRulesCommand = new RelayCommand(_ => AddFiles(Rules, services.Dialogs.OpenFiles("Add rule files", true, "Hashcat rules|*.rule|All files|*.*")));
@@ -137,8 +137,8 @@ public sealed class AttackViewModel : ObservableObject
         DropRulesCommand = new RelayCommand(files => { if (files is string[] paths) AddFiles(Rules, paths); });
         RemoveRuleCommand = new RelayCommand(_ => { if (SelectedRule is { } item) Rules.Remove(item); });
         BrowseMaskCommand = new RelayCommand(_ => { if (services.Dialogs.OpenFiles("Select a mask file", false, "Hashcat masks|*.hcmask|All files|*.*").FirstOrDefault() is { } path) { MaskFile = path; Raise(nameof(MaskFile)); } });
-        BrowseLeftCommand = new RelayCommand(_ => { if (services.Dialogs.OpenFiles("Left wordlist").FirstOrDefault() is { } path) { LeftWordlist = path; Raise(nameof(LeftWordlist)); } });
-        BrowseRightCommand = new RelayCommand(_ => { if (services.Dialogs.OpenFiles("Right wordlist").FirstOrDefault() is { } path) { RightWordlist = path; Raise(nameof(RightWordlist)); } });
+        BrowseLeftCommand = new AsyncCommand(_ => BrowseCombinatorWordlistAsync(true), services.ReportError);
+        BrowseRightCommand = new AsyncCommand(_ => BrowseCombinatorWordlistAsync(false), services.ReportError);
         BrowseOutputCommand = new RelayCommand(_ => { if (services.Dialogs.SaveFile("Results output", "recovered.txt") is { } path) { OutputPath = path; Raise(nameof(OutputPath)); } });
         PreflightCommand = new AsyncCommand(async _ => { await PrepareAsync(); }, ReportAttackError);
         StartCommand = new AsyncCommand(async _ => { var job = await PrepareAsync(); if (job is null) return; await jobs.StartAsync(job); _showJobs(); _draftId = Guid.NewGuid(); Session = "hashlynx-" + _draftId.ToString("N")[..10]; }, ReportAttackError);
@@ -148,12 +148,13 @@ public sealed class AttackViewModel : ObservableObject
         DeleteProfileCommand = new AsyncCommand(async _ => { if (SelectedProfile is not null) { Profiles.Remove(SelectedProfile); await services.Store.SaveProfilesAsync(Profiles.ToList()); } }, services.ReportError);
         ToggleRulesHelpCommand = new RelayCommand(_ => RulesHelpVisible = !RulesHelpVisible);
         UseStarterCommand = new AsyncCommand(_ => UseStarterAsync(), services.ReportError);
-        UseLocalWordlistCommand = new RelayCommand(_ => { if (_localFullWordlist is { } path && File.Exists(path)) { Wordlists.Clear(); Wordlists.Add(path); } }, _ => HasLocalWordlist);
+        UseLocalWordlistCommand = new AsyncCommand(async _ => { if (_localFullWordlist is { } path && File.Exists(path)) { await RememberWordlistsAsync([path]); Wordlists.Clear(); Wordlists.Add(path); } }, services.ReportError, _ => HasLocalWordlist);
     }
     public async Task InitializeAsync()
     {
         Expert = _services.Settings.ExpertMode; Workload = _services.Settings.DefaultWorkloadProfile; Raise(nameof(Workload));
         _localFullWordlist = _bundledWordlists.FindLocalWordlist(); Raise(nameof(HasLocalWordlist));
+        await InitializeWordlistLibraryAsync();
         if (Wordlists.Count == 0) await UseStarterAsync();
         foreach (var profile in await _services.Store.LoadProfilesAsync()) Profiles.Add(profile);
         await Inspector.LoadCatalogAsync();

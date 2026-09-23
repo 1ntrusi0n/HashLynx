@@ -110,7 +110,9 @@ A wordlist supplies starting words; rules transform each word into password cand
 
 Each tier contains the smaller tiers and uses one rule file. These are effort budgets, not measured recovery-rate rankings; candidates can coincide, and larger tiers take more work. With the 848-word starter list, Normal applies 434,176 rules in total. See [preset design and regeneration](docs/rule-presets.md).
 
-The starter list is an original, small educational list embedded in the app (about 6 KB). A larger list appropriate to the target will often be more useful. **Choose wordlist** accepts your own local file. When `wordlist/HashLynx_Wordlist.txt` exists beside the app or in the development checkout, **Use local full list** selects it directly. The supplied combined list is about 506 MiB and 47.4 million lines; it stays local and is not copied into the repository or publish output. The root `rules/` and `wordlist/` source collections are Git-ignored.
+The starter list is an original, small educational list embedded in the app (about 6 KB). A larger list appropriate to the target will often be more useful. **Add wordlists…** accepts multiple local files and remembers their locations. Dropped wordlists are remembered too. On later runs, choose a **Saved wordlist** to use it immediately. Basic mode uses one chosen list; Expert mode appends selections to its ordered attack inputs. Combinator's left/right selectors also offer saved paths. **Remove from attack** only changes the current attack; **Forget saved list** removes its library entry without deleting the source file or changing the current attack. Missing files stay listed and produce a warning when selected; add their new location or reconnect the drive. The library stores references, not copies of wordlist contents.
+
+When `wordlist/HashLynx_Wordlist.txt` exists beside the app or in the development checkout, **Use local full list** selects and remembers it. The supplied combined list is about 506 MiB and 47.4 million lines; it stays local and is not copied into the repository or publish output. The root `rules/` and `wordlist/` source collections are Git-ignored.
 
 The application never adds `--force`. Backend warnings and driver incompatibilities must be resolved normally. Expert arguments are restricted to an explicit set of additional options; they cannot replace managed target/mode/session/output settings or enable network features.
 
@@ -150,6 +152,7 @@ Mutable data lives under `%LOCALAPPDATA%\HashLynx\`:
 | --- | --- |
 | `settings.json` | Paths and UI/default preferences |
 | `profiles.json` | Saved attack configuration, without target contents or recovered results |
+| `wordlists.json` | Saved wordlist file locations; no wordlist contents |
 | `jobs.json` | Job configuration, lifecycle, exit codes, and status snapshots |
 | `targets/` | Working copies of pasted/extracted targets |
 | `jobs/` | Managed job/session state and fallback per-job outputs |

@@ -15,6 +15,7 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ### Added
 
+- Persistent wordlist library: add or drop multiple files once, then select saved lists for Dictionary, Hybrid and Combinator attacks. Basic mode selects one list; Expert mode retains ordered multiple-list inputs. Forgetting entries keeps source files, missing files remain visible, and failed saves or invalid library data are preserved and reported.
 - Native RAR3/RAR5 and 7-Zip extractors with explicit external-tool overrides. RAR supports encrypted headers, stored/independent compressed members and RAR5 password verifiers; 7z supports encrypted headers, LZMA metadata, Copy/LZMA/LZMA2/Deflate streams and combined solid-stream CRC verification.
 - Bounded archive parsing, CRC and verifier validation, cancellation and malformed-input tests; real known-password archive recovery checks. The public-domain LZMA SDK decoder subset reads compressed 7z metadata without Perl or an installed archive tool.
 - Built-in, read-only ZIP extraction for stored/deflated ZipCrypto and WinZip AES-128/192/256, including single-volume ZIP64 and data descriptors. Selects one small supported encrypted member, reports the selection and per-member password limitation, and retains an explicit external zip2john override.
