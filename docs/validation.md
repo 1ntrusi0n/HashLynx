@@ -1,5 +1,12 @@
 # Validation
 
+## Manual catalog layout fix — 2026-09-23
+
+- Reproduced the reported frozen page by expanding a catalog with 600 synthetic modes: WPF threw a `XamlParseException` because `Run.Text` defaulted to a two-way binding against the read-only `HashMode.DisplayName` property.
+- Explicit one-way catalog-label bindings fixed the exception. Expanded-catalog smoke checks passed at 1,380- and 1,040-pixel window widths, including visible page scrollbars, page scrolling, mode selection, and collapse/reopen.
+- Connected smoke passed against the installed Hashcat catalog, including typing `NTLM` into the search field. The existing recovery-configuration and results smoke checks also passed with zero binding errors.
+- Release solution build and Windows publish succeeded with zero build warnings/errors. The harness now reports dispatcher exceptions as test failures instead of leaving a Windows crash dialog open.
+
 ## Presets and simplified workflow — 2026-09-23
 
 - Solution restore and Release build succeeded with zero warnings/errors. The deterministic rule generator is included in the solution build.

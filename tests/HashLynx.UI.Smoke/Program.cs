@@ -36,6 +36,14 @@ internal sealed class SmokeApplication(string output) : Application
     {
         // Intentionally bypass production composition; the tested views and services are unchanged.
         var errors = new StringBuilder();
+        DispatcherUnhandledException += (_, eventArgs) =>
+        {
+            eventArgs.Handled = true;
+            var detail = eventArgs.Exception + Environment.NewLine + errors;
+            File.WriteAllText(Path.Combine(output, "failure.txt"), detail);
+            Console.Error.WriteLine(detail);
+            Shutdown(1);
+        };
         using var listener = new TextWriterTraceListener(new StringWriter(errors));
         PresentationTraceSources.DataBindingSource.Switch.Level = SourceLevels.Error;
         PresentationTraceSources.DataBindingSource.Listeners.Add(listener);
@@ -60,6 +68,7 @@ internal sealed class SmokeApplication(string output) : Application
             }
 
             await CheckSimpleWorkflowAsync(shell, store, window);
+            await CheckManualCatalogAsync(shell, window, true);
 
             shell.Selected = shell.Navigation[0];
             for (var family = 0; family < 4; family++)
@@ -99,7 +108,7 @@ internal sealed class SmokeApplication(string output) : Application
             }
             listener.Flush();
             Require(errors.Length == 0, "WPF binding failures: " + errors);
-            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all six pages; four attack families; three target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; preflight error handling; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, preset command preflight, and masked/revealed results passed." : ""));
+            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all six pages; four attack families; three target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; populated manual catalog expansion, selection and scrolling; preflight error handling; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, and masked/revealed results passed." : ""));
             Console.WriteLine("WPF smoke passed. Screenshots and report: " + output);
             Shutdown(0);
         }
@@ -201,6 +210,7 @@ internal sealed class SmokeApplication(string output) : Application
     {
         await services.ConnectAsync(executable);
         await shell.Attack.Inspector.LoadCatalogAsync();
+        await CheckManualCatalogAsync(shell, window, false);
         var plaintext = "HashLynx-ui-synthetic-" + Guid.NewGuid().ToString("N");
         var digest = Convert.ToHexStringLower(MD5.HashData(Encoding.UTF8.GetBytes(plaintext)));
         var inspector = shell.Attack.Inspector;
@@ -262,6 +272,55 @@ internal sealed class SmokeApplication(string output) : Application
         encoder.Frames.Add(BitmapFrame.Create(image));
         using var stream = File.Create(Path.Combine(output, name + ".png"));
         encoder.Save(stream);
+    }
+
+    private async Task CheckManualCatalogAsync(ShellViewModel shell, Window window, bool synthetic)
+    {
+        shell.Selected = shell.Navigation[0];
+        var inspector = shell.Attack.Inspector;
+        if (synthetic)
+            for (var index = 0; index < 600; index++) inspector.Modes.Add(new HashMode(index, "Synthetic long hash mode description with iterations and a large amount of format detail " + index, "Synthetic category"));
+        await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        var scroll = Find<ScrollViewer>(window, "AttackScrollViewer");
+        var expander = Find<Expander>(window, "ManualModeExpander");
+        var label = synthetic ? "Synthetic" : "Installed";
+        foreach (var width in new[] { 1380, 1040 })
+        {
+            window.Width = width;
+            scroll.ScrollToTop();
+            expander.IsExpanded = true;
+            await RenderAsync(window, $"Manual-catalog-{label}-{width}");
+            var list = Find<ListBox>(window, "ManualModeList");
+            Require(scroll.ComputedVerticalScrollBarVisibility == Visibility.Visible && scroll.ScrollableHeight > 0, "Opening the manual catalog must retain the page scrollbar.");
+            Require(scroll.ActualWidth <= window.ActualWidth - 220, "Opening the manual catalog must stay within the page viewport.");
+            Require(list.Items.Count == inspector.Modes.Count && list.Items.Count > 100, "The expanded catalog must contain the populated mode list.");
+            var mode = inspector.Modes[^1];
+            list.SelectedItem = mode;
+            list.ScrollIntoView(mode);
+            await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            Require(inspector.SelectedMode == mode, "Manual mode selection must update the recovery configuration.");
+            scroll.ScrollToEnd();
+            await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            Require(scroll.VerticalOffset > 0, "The page must remain scrollable while the catalog is open.");
+            expander.IsExpanded = false;
+            await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        }
+        if (!synthetic)
+        {
+            expander.IsExpanded = true;
+            var search = Find<TextBox>(window, "ManualModeSearch");
+            search.Text = "NTLM";
+            await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            Require(inspector.Search == "NTLM" && inspector.Modes.Any(mode => mode.Mode == 1000), "Typing in manual search must filter the installed catalog and retain NTLM.");
+            Require(inspector.Modes.All(mode => mode.DisplayName.Contains("NTLM", StringComparison.OrdinalIgnoreCase) || mode.Category.Contains("NTLM", StringComparison.OrdinalIgnoreCase)), "Manual search must not show nonmatching modes.");
+            await RenderAsync(window, "Manual-catalog-search");
+            search.Text = "";
+            expander.IsExpanded = false;
+        }
+        inspector.SelectedMode = null;
+        if (synthetic) inspector.Modes.Clear();
+        window.Width = 1380;
+        scroll.ScrollToTop();
     }
 
     private static void Require(bool condition, string message)

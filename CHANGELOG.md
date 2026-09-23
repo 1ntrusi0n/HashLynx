@@ -4,6 +4,10 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ## [Unreleased]
 
+### Fixed
+
+- Opening the populated manual hash-mode catalog no longer interrupts page layout or makes the scrollbar disappear. Read-only catalog labels now use one-way bindings, and WPF smoke checks exercise expansion, scrolling, mode selection, and installed-catalog search.
+
 ### Added
 
 - Original, embedded Quick (64), Normal (512), Heavy (4,096), and Super (16,384) Dictionary rule presets, with deterministic regeneration and versioned profile identifiers.
