@@ -17,6 +17,8 @@ internal sealed partial class SmokeApplication
 {
     private async Task CheckHintsAndQueueAsync(ShellViewModel shell, PersistenceStore store, Window window)
     {
+        var previousExpert = shell.Attack.Expert;
+        shell.Attack.Expert = true;
         shell.Selected = shell.Navigation.First(item => item.Page == shell.Attack);
         await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
         Find<Expander>(window, "HintsExpander").IsExpanded = true;
@@ -37,6 +39,7 @@ internal sealed partial class SmokeApplication
         hintsScroll.ScrollToVerticalOffset(hintsScroll.VerticalOffset + hintsPanel.TranslatePoint(new Point(0, 0), hintsScroll).Y - 25);
         await RenderAsync(window, "Hints-preview");
         Find<Expander>(window, "HintsExpander").IsExpanded = false;
+        shell.Attack.Expert = previousExpert;
 
         Find<Expander>(window, "WordlistManagerExpander").IsExpanded = true;
         await RenderAsync(window, "Wordlist-library-tools");
@@ -141,7 +144,7 @@ internal sealed partial class SmokeApplication
         shell.DismissCompletionCommand.Execute(null);
 
         // Real hint file creation and queue staging, without automatically running the broader pattern.
-        shell.Attack.Expert = false; shell.Attack.Inspector.InputMode = 0; shell.Attack.Inspector.HashText = hash;
+        shell.Attack.Expert = true; shell.Attack.Inspector.InputMode = 0; shell.Attack.Inspector.HashText = hash;
         await shell.Attack.Inspector.PrepareTargetAsync(); shell.Attack.Inspector.SelectedMode = shell.Attack.Inspector.FindMode(0);
         shell.Attack.Hints.UsePattern = false; shell.Attack.Hints.Words = "$HEX[61]\nQueue1!"; shell.Attack.Hints.TryVariations = false;
         shell.Attack.Hints.PreviewCommand.Execute(null);

@@ -4,7 +4,7 @@ Branch: `experiment/recovery-workflows`. The test build is `artifacts/publish/re
 
 ## Password hints
 
-On Attack, select a target and expand **What do you remember?**. Enter remembered words/phrases, one per line. They are tried unchanged by default; optional Quick and Normal steps add variations. A separate pattern describes a known beginning, unknown middle, known ending and inclusive total length range. Known text is literal (including `?`); generated masks preserve both ends for every length instead of shortening the suffix with increment mode.
+On Attack, enable **Expert mode**, select a target and expand **What do you remember?**. Enter remembered words/phrases, one per line. They are tried unchanged by default; optional Quick and Normal steps add variations. A separate pattern describes a known beginning, unknown middle, known ending and inclusive total length range. Known text is literal (including `?`); generated masks preserve both ends for every length instead of shortening the suffix with increment mode.
 
 For example, beginning `Summer`, ending `!`, total length 11 and digits in the middle produces 10,000 candidates from `Summer0000!` through `Summer9999!`. An optional ending can be expressed as a second sequence without that ending. These are explicit patterns, not natural-language guesses. Pattern text currently supports printable ASCII; word/phrase files preserve UTF-8 and spaces. There are at most 200 distinct words, 128 UTF-8 bytes per word, total pattern lengths 1-32, and at most 16 lengths per preview.
 
@@ -12,7 +12,7 @@ Preview shows attempts, example candidates and a candidate-application estimate.
 
 ## Queue behavior
 
-**Add current attack to queue** snapshots the selected target and attack configuration. To append to a sequence, select it on Queue first and enable **Append current attack** on Attack. Appending requires the same target bytes and mode and an unstarted sequence. **Queue No Rules, Quick, Normal** creates a three-step dictionary sequence from the selected wordlist(s), without custom rules or loopback. The hints wizard builds its own sequence.
+Enable **Expert mode** on Attack to show **Run several attempts**. Its **Add current attack to queue** action snapshots the selected target and attack configuration. To append to a sequence, select it on Queue first and enable **Append current attack** on Attack. Appending requires the same target bytes and mode and an unstarted sequence. **Queue No Rules, Quick, Normal** creates a three-step dictionary sequence from the selected wordlist(s), without custom rules or loopback. The hints wizard builds its own sequence. The Queue page and saved sequences remain available in Basic mode.
 
 Review the Queue page and choose **Start queue**. Only one compute operation runs at a time. Steps have independent sessions, checkpoints and result files; a sequence shares its own potfile to skip targets recovered by earlier steps. It does not import the normal app's shared recovery cache. Exhaustion advances to the next step, complete recovery skips the rest of that sequence, and errors/stops pause the queue. Other sequences retain their own targets and caches.
 
@@ -31,7 +31,7 @@ The target is copied at enqueue time. Wordlists, custom-rule files and mask file
 ## Suggested manual checks
 
 1. Open the experimental executable and confirm the experimental window title and Settings data directory.
-2. Choose a test target with a known password, enter matching hints, preview, add to Queue and start it. Confirm the recovered password in its session results.
+2. Confirm **What do you remember?** and **Run several attempts** are hidden in Basic mode and shown in Expert mode. In Expert mode, choose a test target with a known password, enter matching hints, preview, add to Queue and start it. Confirm the recovered password in its session results.
 3. Queue a list that misses the password followed by one that contains it. Check that the first exhausts, the second recovers, and later steps in that sequence are skipped.
 4. Pause between attempts and restart the app. Confirm the saved queue waits for you to start it.
 5. Test a selected hardware device, rename a saved wordlist, and create a combined list at a new path.

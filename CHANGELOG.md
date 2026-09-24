@@ -4,6 +4,10 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ## [Unreleased]
 
+### Changed
+
+- The Attack page's **What do you remember?** and **Run several attempts** sections now appear only in Expert mode. The Queue page and existing sequences remain available in Basic mode.
+
 ### Fixed
 
 - Automatic device selection now runs a disposable known-answer check before starting a new recovery, skips failing devices, and permits a verified CPU fallback. Explicit Hardware/Expert selections remain authoritative. Verification can be stopped, queue pause/shutdown prevents late launches, and retries get fresh session paths.
