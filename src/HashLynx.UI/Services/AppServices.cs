@@ -1,6 +1,7 @@
 using HashLynx.Hashcat;
 using HashLynx.Persistence;
 using HashLynx.Extractors;
+using HashLynx.Drives;
 using HashLynx.UI.Infrastructure;
 using System.Windows;
 using System.Windows.Media;
@@ -20,6 +21,7 @@ public sealed class AppServices : ObservableObject
     public PersistenceStore Store { get; }
     public HashcatFacade Backend { get; }
     public DialogService Dialogs { get; } = new();
+    public IBitLockerDriveService BitLockerDrives { get; }
     public StructuredLog Log { get; }
     public AppSettings Settings { get; private set; } = new();
     public HashcatInstallation? Installation { get => _installation; private set { Set(ref _installation, value); Raise(nameof(BackendLabel)); } }
@@ -43,9 +45,10 @@ public sealed class AppServices : ObservableObject
         DefaultDevicesChanged?.Invoke();
         Notice = $"Recovery default saved: {DefaultDeviceSummary}. Applies to new attacks, including Basic mode.";
     }
-    public AppServices(PersistenceStore? store = null, HashcatFacade? backend = null)
+    public AppServices(PersistenceStore? store = null, HashcatFacade? backend = null, IBitLockerDriveService? bitLockerDrives = null)
     {
         Store = store ?? new PersistenceStore();
+        BitLockerDrives = bitLockerDrives ?? new DriveReaderClient();
         Backend = backend ?? new HashcatFacade(Store.Paths.CacheDirectory);
         Log = new StructuredLog(Store.Paths);
         ErrorDetails = $"Sanitized logs: {Store.Paths.LogsDirectory}";

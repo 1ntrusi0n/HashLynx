@@ -9,6 +9,8 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using HashLynx.Persistence;
 using HashLynx.Core;
+using HashLynx.Drives;
+using HashLynx.Extractors;
 using HashLynx.Hashcat;
 using HashLynx.UI.Infrastructure;
 using HashLynx.UI.Services;
@@ -51,7 +53,8 @@ internal sealed class SmokeApplication(string output) : Application
         {
             var store = new PersistenceStore(new AppPaths(Path.Combine(output, "data-" + Guid.NewGuid().ToString("N"))));
             await store.SaveSettingsAsync(new AppSettings { HashcatDirectory = Path.Combine(output, "deliberately-missing-backend") });
-            var services = new AppServices(store);
+            var driveService = new FakeDriveService();
+            var services = new AppServices(store, bitLockerDrives: driveService);
             var shell = new ShellViewModel(services);
             var window = new MainWindow { DataContext = shell, Width = 1380, Height = 920, ShowInTaskbar = false, Left = -20000, Top = -20000, WindowStartupLocation = WindowStartupLocation.Manual };
             MainWindow = window;
@@ -75,6 +78,7 @@ internal sealed class SmokeApplication(string output) : Application
             await CheckSessionHistoryAsync(shell, store, window);
             await CheckSessionResultsIsolationAsync(shell, store, window);
             await CheckZipConfigurationAsync(shell, window);
+            await CheckBitLockerDriveAsync(shell, driveService, window);
 
             shell.Selected = shell.Navigation[0];
             for (var family = 0; family < 4; family++)
@@ -83,7 +87,7 @@ internal sealed class SmokeApplication(string output) : Application
                 shell.Attack.Expert = true;
                 await RenderAsync(window, "Attack-family-" + family);
             }
-            for (var input = 0; input < 3; input++)
+            for (var input = 0; input < 4; input++)
             {
                 shell.Attack.Inspector.InputMode = input;
                 await RenderAsync(window, "Inspector-input-" + input);
@@ -117,7 +121,7 @@ internal sealed class SmokeApplication(string output) : Application
             }
             listener.Flush();
             Require(errors.Length == 0, "WPF binding failures: " + errors);
-            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all navigation pages; four attack families; three target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; saved wordlist import, restart, selection, Combinator/Hybrid, deduplication, missing files, safe removal and failed/corrupt save handling; populated manual catalog expansion, selection and scrolling; populated running/failed Jobs with progress updates; inactive history deletion, Undo, file retention and save-failure rollback; saved Hardware default, Basic selection, Expert overrides, restart persistence; preflight error handling; native formats hidden from settings, legacy native overrides ignored, including PDF; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, automatic result loading, View recovered passwords navigation/reveal, stale-result clearing, native ZIP/RAR/7z/BitLocker/PDF extraction, confirmed automatic mode selection, and persistent extraction notes passed." : "") + (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice) ? " Real recovery: Start → Jobs → Results recovered the known NTLM fixture in Basic mode with the starter list, Normal preset, and saved Hardware default." : ""));
+            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all navigation pages; four attack families; four target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; saved wordlist import, restart, selection, Combinator/Hybrid, deduplication, missing files, safe removal and failed/corrupt save handling; populated manual catalog expansion, selection and scrolling; populated running/failed Jobs with progress updates; inactive history deletion, Undo, file retention and save-failure rollback; saved Hardware default, Basic selection, Expert overrides, restart persistence; preflight error handling; drive selection, extraction, cancellation, stale-result rejection and removal; native formats hidden from settings, legacy native overrides ignored, including PDF; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, automatic result loading, View recovered passwords navigation/reveal, stale-result clearing, native ZIP/RAR/7z/BitLocker/PDF extraction, confirmed automatic mode selection, and persistent extraction notes passed." : "") + (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice) ? " Real recovery: Start → Jobs → Results recovered the known NTLM fixture in Basic mode with the starter list, Normal preset, and saved Hardware default." : ""));
             Console.WriteLine("WPF smoke passed. Screenshots and report: " + output);
             Shutdown(0);
         }
@@ -214,6 +218,59 @@ internal sealed class SmokeApplication(string output) : Application
         await ((AsyncCommand)attack.UseStarterCommand).ExecuteAsync(null);
         scroll.ScrollToTop();
         services.Notice = "Saved wordlist library checks passed.";
+    }
+
+    private async Task CheckBitLockerDriveAsync(ShellViewModel shell, FakeDriveService drives, Window window)
+    {
+        shell.Selected = shell.Navigation[0];
+        var inspector = shell.Attack.Inspector;
+        inspector.InputMode = 3;
+        await inspector.RefreshDrivesAsync();
+        Require(inspector.Drives.Count == 2 && inspector.SelectedDrive is null, "Drive selection must be explicit.");
+        inspector.SelectedDrive = inspector.Drives[0];
+        var target = await inspector.PrepareTargetAsync();
+        Require(await File.ReadAllTextAsync(target) == BitLockerFixtureText + Environment.NewLine, "Drive hashes must enter the normal target workflow.");
+        Require(inspector.ExtractionNotice.Contains("Synthetic"), "Drive extraction notes must remain visible.");
+        Require(await inspector.PrepareTargetAsync() == target && drives.Extractions == 1, "Prepared targets must not trigger repeated elevation.");
+        await RenderAsync(window, "BitLocker-drive-extracted");
+        inspector.SelectedDrive = inspector.Drives[1];
+        Require(inspector.PreparedTargetPath is null && inspector.SelectedMode is null && inspector.ExtractionNotice == "", "Changing volumes must clear the old target.");
+        drives.Pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pending = inspector.PrepareTargetAsync();
+        Require(inspector.ReadingDrive, "The pending read must expose cancellation.");
+        inspector.CancelDriveCommand.Execute(null);
+        try { await pending; throw new InvalidOperationException("Expected cancelled drive read."); } catch (OperationCanceledException) { }
+        Require(inspector.PreparedTargetPath is null && !inspector.ReadingDrive, "Cancellation must not retain a target or busy state.");
+        drives.Pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        pending = inspector.PrepareTargetAsync();
+        inspector.InputMode = 0;
+        try { await pending; throw new InvalidOperationException("Expected cancellation after target change."); } catch (OperationCanceledException) { }
+        Require(inspector.PreparedTargetPath is null, "Late drive results must not replace a new target.");
+        drives.Pending = null; drives.Error = "No supported password protector.";
+        inspector.InputMode = 3;
+        try { await inspector.PrepareTargetAsync(); throw new InvalidOperationException("Expected an unsupported protector error."); }
+        catch (InvalidOperationException ex) when (ex.Message == drives.Error) { }
+        Require(inspector.DriveStatus == drives.Error && inspector.PreparedTargetPath is null, "Unsupported protectors must leave no attack target.");
+        drives.Items = [];
+        await inspector.RefreshDrivesAsync();
+        Require(inspector.SelectedDrive is null && inspector.Drives.Count == 0, "Removing a device must clear its selection.");
+        await RenderAsync(window, "BitLocker-drive-removed");
+        inspector.InputMode = 0;
+    }
+    private static string BitLockerFixtureText => HashLynx.Extractors.Tests.BitLockerFixture.Hash;
+    private sealed class FakeDriveService : IBitLockerDriveService
+    {
+        public IReadOnlyList<DriveCandidate> Items = [new(@"\\?\Volume{aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa}\", @"E:\", "Synthetic test USB", 16_000_000_000, "Removable"), new(@"\\?\Volume{bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb}\", @"F:\", "Other test volume", 32_000_000_000, "Fixed")];
+        public int Extractions;
+        public string? Error;
+        public TaskCompletionSource<DriveReadResponse>? Pending;
+        public Task<IReadOnlyList<DriveCandidate>> DiscoverAsync(CancellationToken ct = default) => Task.FromResult(Items);
+        public Task<DriveReadResponse> ExtractAsync(DriveCandidate candidate, CancellationToken ct = default)
+        {
+            Extractions++;
+            if (Pending is not null) return Pending.Task.WaitAsync(ct);
+            return Task.FromResult(Error is not null ? new DriveReadResponse(null, Error) : new(new ExtractionResult { Success = true, Hashes = [BitLockerFixtureText], SuggestedHashcatModes = [22100], Diagnostics = ["Synthetic drive metadata only."] }, null, 4096));
+        }
     }
 
     private async Task CheckZipConfigurationAsync(ShellViewModel shell, Window window)

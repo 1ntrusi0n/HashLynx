@@ -13,6 +13,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <ProjectReference Include="../../src/HashLynx.Extractors/HashLynx.Extractors.csproj" />
+    <ProjectReference Include="../../src/HashLynx.Drives/HashLynx.Drives.csproj" />
     <Using Include="Xunit" />
   </ItemGroup>
 </Project>

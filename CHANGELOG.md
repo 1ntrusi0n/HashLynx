@@ -15,6 +15,9 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ### Added
 
+- BitLocker Drive target picker and a separate, user-approved Windows administrator reader. Reads bounded partition metadata through read-only device handles, validates the helper connection, checks repeated extraction for changes, and feeds existing Hashcat identification/recovery. No image creation or device modification is required.
+- Promoted direct BitLocker extraction into the normal application after user-confirmed device testing. Restored the standard app title, data directory and publish path; earlier experimental data is preserved separately. The helper is included in build/publish output.
+- Live-device support for zeroed legacy BitLocker sector-size fields using authoritative Windows geometry, with mismatched sizes rejected and raw-image validation retained.
 - Native PDF open-password extraction for Standard Security Handler revisions 2-6 (RC4-40/128 and AES-128/256), with bounded syntax parsing, active classic/stream/hybrid cross-references, incremental updates and no Python dependency. Independent PDF fixtures match pdf2john; malformed inputs and known-password Hashcat recovery are covered by tests.
 - PDF legacy tool paths no longer override native extraction. With all five formats built in, the empty Extractors settings page is hidden; encrypted files continue through Target Inspector.
 - Built-in BitLocker password-protector extraction from raw Windows 7+ partition images, including To Go and used-space-only layouts. Emits authenticated mode-22100 hashes without Python; validates bounded metadata and reports backup use and unsupported protectors.

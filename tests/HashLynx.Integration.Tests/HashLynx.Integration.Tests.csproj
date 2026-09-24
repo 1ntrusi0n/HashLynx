@@ -13,6 +13,7 @@
     </PackageReference>
     <ProjectReference Include="..\..\src\HashLynx.Hashcat\HashLynx.Hashcat.csproj" />
     <ProjectReference Include="..\..\src\HashLynx.Extractors\HashLynx.Extractors.csproj" />
+    <ProjectReference Include="..\..\src\HashLynx.Drives\HashLynx.Drives.csproj" />
     <Compile Include="..\HashLynx.Extractors.Tests\BitLockerFixture.cs" Link="Fixtures\BitLockerFixture.cs" />
   </ItemGroup>
 </Project>
