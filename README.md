@@ -3,10 +3,6 @@
 # HashLynx
 
 
-> **Experimental branch: BitLocker drive reader.** This build adds **Attack > BitLocker Drive** for connected volumes. It runs alongside the stable app with a separate window title and data directory: `%LOCALAPPDATA%\HashLynx\Experiments\BitLockerDrive`. On first launch it copies only existing preferences, including the working Hashcat device choice. Sessions, targets and profiles are separate. This feature has not been merged into `main`.
-
-Select **Refresh drives**, choose the volume by letter/label/size, then **Extract and analyze (admin)**. Approve the UAC prompt for the bundled reader. Supported password records continue through normal Hashcat identification and recovery. The reader opens the physical device read-only, reads only metadata within the selected partition, and exits. No full image, Python, drive unlocking or protector changes are needed. The complete published folder, including `DriveReader/`, must stay together. See [drive-reader design and tests](docs/bitlocker-drive-test.md).
-
 A local Windows desktop workspace for **Hashcat**: inspect recovery targets, configure attacks, monitor jobs, and review results from one native WPF interface.
 
 **Status: 0.1.0 — early functional bootstrap.** HashLynx orchestrates the official Hashcat executable; it does not implement a cracking engine. It is intended for legitimate password recovery, authorized security auditing, research, labs, and CTFs.
@@ -16,7 +12,7 @@ HashLynx is an independent GUI frontend. Hashcat is a separate third-party proje
 ## What is implemented
 
 - Native C#/.NET 10 WPF shell with MVVM, the supplied branding, a multi-size Windows icon, navy/teal styling, and Dark/Light/System preferences.
-- **Target Inspector** with Paste Hash, Hash File, and Encrypted File inputs; file browsing and drag/drop; source/context selection; Hashcat identification; and a searchable manual mode catalog generated from the installed release.
+- **Target Inspector** with Paste Hash, Hash File, Encrypted File, and BitLocker Drive inputs; file browsing and drag/drop; source/context selection; Hashcat identification; and a searchable manual mode catalog generated from the installed release.
 - Dictionary, Mask, both Hybrid directions, and Combinator configurations. Dictionary attacks include original Quick, Normal, Heavy, and Super rule presets, an 848-word starter list, and clickable rule examples. Expert mode supports custom rule files and multiple wordlists.
 - Mask/custom charset validation, increment settings, workload/device/temperature controls, named sessions, potfile/output options, and a constrained Expert argument extension field.
 - Automatic validation when starting recovery, with run options, a copyable command preview, and a separate Preflight button in Expert mode. Commands execute with `ProcessStartInfo.ArgumentList`, never through a shell.
@@ -79,7 +75,7 @@ Open the solution in Visual Studio or the repository folder in VS Code with C# s
 To publish a framework-dependent x64 application:
 
 ```powershell
-dotnet publish src/HashLynx.UI -c Release -r win-x64 --self-contained false -o artifacts/publish/bitlocker-drive-test
+dotnet publish src/HashLynx.UI -c Release -r win-x64 --self-contained false -o artifacts/publish/win-x64
 ```
 
 Or run `./scripts/build.ps1 -Publish`. Copy the publish directory as a unit. Obtain Hashcat separately and put its complete release alongside the application under `hashcat\`, or configure its existing location in Settings. Runtime dependencies are not silently installed.
@@ -147,7 +143,9 @@ ZIP works immediately without configuration. It supports stored/deflated ZipCryp
 
 RAR and 7-Zip also work without configuration. RAR supports RAR3 encrypted headers and stored/compressed members, and RAR5 password verifiers. 7-Zip supports encrypted headers, compressed metadata, and ordinary or solid encrypted streams using Copy, LZMA, LZMA2 or Deflate. They read archives locally without unpacking files. Unsupported variants produce diagnostics. To use another extractor, run it separately and import its Hashcat-compatible output through Hash File. See [format coverage and limits](docs/extractors.md).
 
-BitLocker reads raw Windows 7+ partition images with a user-password protector, including BitLocker To Go and used-space-only layouts. It needs no Python or external script. It emits authenticated type-1 records for mode 22100 and can use a backup when primary metadata is damaged. It does not mount or decrypt disks. TPM/PIN protectors, recovery-password cracking, Vista metadata and automatic whole-disk partition discovery are unsupported. See [extractor details](docs/extractors.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
+BitLocker can read a connected volume through **BitLocker Drive > Refresh drives > Extract and analyze (admin)**. Approve the UAC prompt for the bundled read-only helper; the main app and Hashcat remain unelevated. Keep the complete application folder together, including `DriveReader/`. See [drive extraction and limits](docs/bitlocker-drives.md).
+
+BitLocker also reads raw Windows 7+ partition images with a user-password protector, including BitLocker To Go and used-space-only layouts. It needs no Python or external script. It emits authenticated type-1 records for mode 22100 and can use a backup when primary metadata is damaged. It does not mount or decrypt disks. TPM/PIN protectors, recovery-password cracking, Vista metadata and automatic whole-disk partition discovery are unsupported. See [extractor details](docs/extractors.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
 
 ## Privacy, data, and diagnostics
 

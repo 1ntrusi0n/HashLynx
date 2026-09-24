@@ -45,7 +45,7 @@ public static class WindowsVolumes
     internal static Extent GetExtent(SafeFileHandle volume)
     {
         var bytes = Query(volume, 0x00560000, 32, 4096); // IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS
-        if (BinaryPrimitives.ReadUInt32LittleEndian(bytes) != 1) throw new InvalidDataException("This test build supports volumes on one contiguous physical disk only.");
+        if (BinaryPrimitives.ReadUInt32LittleEndian(bytes) != 1) throw new InvalidDataException("The drive reader supports volumes on one contiguous physical disk only.");
         var value = new Extent(BinaryPrimitives.ReadUInt32LittleEndian(bytes.AsSpan(8)), BinaryPrimitives.ReadInt64LittleEndian(bytes.AsSpan(16)), BinaryPrimitives.ReadInt64LittleEndian(bytes.AsSpan(24)));
         if (value.Offset < 0 || value.Length <= 0 || value.Offset > long.MaxValue - value.Length) throw new InvalidDataException("The volume boundaries are invalid.");
         return value;

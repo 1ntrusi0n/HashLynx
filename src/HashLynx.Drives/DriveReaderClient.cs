@@ -15,7 +15,7 @@ public sealed class DriveReaderClient(string? helperPath = null) : IBitLockerDri
     {
         if (!DriveProtocol.IsVolumeId(candidate.VolumeId)) throw new InvalidOperationException("Select a valid local drive first.");
         var helper = Path.GetFullPath(helperPath ?? Path.Combine(AppContext.BaseDirectory, "DriveReader", "HashLynx.DriveReader.exe"));
-        if (!File.Exists(helper)) throw new InvalidOperationException("The drive reader is missing. Use the complete test build folder.");
+        if (!File.Exists(helper)) throw new InvalidOperationException("The drive reader is missing. Use the complete application folder, including DriveReader.");
         // Revalidate the mount point before elevation; the helper then opens the stable volume ID.
         var current = await DiscoverAsync(ct);
         if (!current.Any(item => item.VolumeId == candidate.VolumeId && item.MountPoint == candidate.MountPoint))

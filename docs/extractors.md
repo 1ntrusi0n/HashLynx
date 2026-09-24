@@ -56,7 +56,7 @@ Current limits: single-volume standard archives, no AES salt (as required by Has
 
 ## Built-in BitLocker extraction
 
-This experimental branch also accepts a connected volume through **BitLocker Drive**. Its administrator helper supplies bounded, read-only partition access to the same metadata parser. See [the test workflow and limits](bitlocker-drive-test.md). The raw-image workflow remains available.
+The app also accepts a connected volume through **BitLocker Drive**. Its administrator helper supplies bounded, read-only partition access to the same metadata parser. See [the test workflow and limits](bitlocker-drives.md). The raw-image workflow remains available.
 
 Select a raw partition image starting at its boot sector in Target Inspector. The reader supports Windows 7+ `-FVE-FS-` and BitLocker To Go `MSWIN4.1` layouts with the standard or used-space-only identifier. It reads metadata block version 2, metadata header version 1, and version-1 VMKs protected by a user password (`0x2000`). Stretch-key methods `0x1000` and `0x1001`, a 16-byte salt, a 12-byte nonce, and 60 bytes of authentication tag plus encrypted VMK are supported.
 

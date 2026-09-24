@@ -1,5 +1,11 @@
 # Validation
 
+## BitLocker promotion to main - 2026-09-24
+
+- The user reported successful BitLocker testing and explicitly approved merging the drive reader into main. This is user-reported validation in addition to the previous automated live extraction/identification check; no new live-device reads or attacks were needed for the merge.
+- Removed the experimental title, workspace initialization and UI labels. Startup and the publish script now use the normal application title, `%LOCALAPPDATA%\HashLynx` workspace and `artifacts/publish/win-x64` destination. Existing experimental data is preserved separately without automatic history migration.
+- Restore and Release build passed with zero warnings/errors. All 323 standard tests passed; nine opt-in tests were skipped. Connected WPF smoke passed with zero binding errors, including drive selection, cancellation and stale-result handling. The tested read-only helper and device-access restrictions remain in place.
+
 ## Experimental direct BitLocker volume extraction - 2026-09-23
 
 - Work is isolated on `experiment/bitlocker-drive-reader`, with a separate test publish folder and experimental application data. The stable branch/build remains available.
@@ -7,7 +13,7 @@
 - Initial live testing exposed a zeroed legacy sector-size field. The parser now accepts authoritative Windows logical-sector geometry for live devices, rejects mismatches and preserves image-only validation. A synthetic regression covers that case. The helper's canonical volume-ID validation, alignment/partition/read-budget checks and framed IPC limits are unit tested.
 - Standard suite: 323 passed (183 Extractors/Drives, 93 Hashcat, 23 Core, 24 Persistence), with nine opt-in tests skipped. The live-device test passed separately. Release build and separate Windows publish passed with no warnings/errors.
 - Connected WPF smoke passed with zero binding errors: explicit drive selection, normal target creation, cached extraction, cancellation, stale-result rejection, unsupported protector feedback and removal handling, plus the existing recovery UI checks. Synthetic screenshots are under ignored `artifacts/ui-smoke-bitlocker-drive/`.
-- Recovery against the real device's known password has not yet been tested. See [test instructions and limitations](bitlocker-drive-test.md).
+- At this stage, recovery against the real device's known password had not yet been tested by the user. See [test instructions and limitations](bitlocker-drives.md).
 
 ## Native PDF extraction - 2026-09-23
 
