@@ -7,7 +7,14 @@
     </DockPanel></Border>
     <Grid Grid.Column="1"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
       <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="28,16"><DockPanel><StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Ellipse Width="7" Height="7" Fill="{DynamicResource AccentBrush}" Margin="0,0,8,0"/><TextBlock Text="{Binding Services.BackendLabel}" Style="{StaticResource Muted}"/></StackPanel><TextBlock Text="AUTHORIZED RECOVERY &amp; AUDITING" FontSize="10" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center"/></DockPanel></Border>
-      <ContentControl Grid.Row="1" Content="{Binding CurrentPage}"/>
+      <DockPanel Grid.Row="1">
+        <Border x:Name="CompletionBanner" DockPanel.Dock="Top" Style="{StaticResource Card}" Margin="30,16,30,0" Visibility="{Binding CompletionVisible, Converter={StaticResource BoolVisibility}}"><StackPanel>
+          <DockPanel><Button Content="Dismiss" DockPanel.Dock="Right" Command="{Binding DismissCompletionCommand}"/><TextBlock Text="{Binding CompletionTitle}" Style="{StaticResource SectionTitle}"/></DockPanel>
+          <TextBlock Text="{Binding CompletionDetail}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+          <WrapPanel><Button Content="View recovered passwords" Command="{Binding OpenCompletionCommand}" Style="{StaticResource PrimaryButton}" Visibility="{Binding CompletionHasResults, Converter={StaticResource BoolVisibility}}"/><Button Content="View session" Command="{Binding OpenCompletionSessionCommand}"/><Button Content="Choose another attempt" Command="{Binding TryAnotherAttemptCommand}"/></WrapPanel>
+        </StackPanel></Border>
+        <ContentControl Content="{Binding CurrentPage}"/>
+      </DockPanel>
       <Border Grid.Row="2" Background="{DynamicResource SidebarBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="28,10"><StackPanel><TextBlock Text="{Binding Services.Notice}" Foreground="{DynamicResource MutedBrush}" FontSize="12" MaxHeight="55" TextTrimming="CharacterEllipsis" ToolTip="{Binding Services.Notice}"/><Expander Header="Diagnostics" FontSize="11" Margin="0,5,0,0"><TextBox Text="{Binding Services.ErrorDetails, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" Margin="0,7,0,0"/></Expander></StackPanel></Border>
     </Grid>
   </Grid>

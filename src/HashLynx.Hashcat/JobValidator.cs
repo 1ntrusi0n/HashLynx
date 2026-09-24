@@ -34,12 +34,20 @@ public sealed class JobValidator(HashcatCommandBuilder builder)
             Error("Rules", ex is ArgumentException ? ex.Message : "The built-in rule preset could not be prepared. Check access to the application data directory.");
         }
         foreach (var path in ruleFiles) RequireFile("Rule file", path);
-        var hasMask = job.Attack.Kind is AttackFamilies.Mask or AttackFamilies.HybridWordlistMask or AttackFamilies.HybridMaskWordlist;
-        if (hasMask)
+        string? maskFile = job.Attack.MaskFile;
+        var maskPresetInvalid = false;
+        try { maskFile = builder.ResolveMaskFile(job.Attack); }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            if (!string.IsNullOrWhiteSpace(job.Attack.MaskFile))
+            maskPresetInvalid = true;
+            Error("Mask", ex is ArgumentException ? ex.Message : "The built-in mask list could not be prepared. Check access to the application data directory.");
+        }
+        var hasMask = job.Attack.Kind is AttackFamilies.Mask or AttackFamilies.HybridWordlistMask or AttackFamilies.HybridMaskWordlist;
+        if (hasMask && !maskPresetInvalid)
+        {
+            if (!string.IsNullOrWhiteSpace(maskFile))
             {
-                RequireFile("Mask file", job.Attack.MaskFile);
+                RequireFile("Mask file", maskFile);
                 foreach (var error in MaskValidator.Analyze("x", job.Attack.CustomCharsets).Errors) Error("Charset", error);
             }
             else
@@ -49,7 +57,9 @@ public sealed class JobValidator(HashcatCommandBuilder builder)
                 if (job.Attack.Increment && job.Attack.IncrementMaximum > mask.Length) Error("Increment", "Increment maximum exceeds the mask length.");
             }
         }
-        else if (job.Attack.Increment || job.Attack.CustomCharsets.Count > 0) Error("Mask", "Increment and custom charsets require a mask attack.");
+        else if (!hasMask && (job.Attack.Increment || job.Attack.CustomCharsets.Count > 0)) Error("Mask", "Increment and custom charsets require a mask attack.");
+        if (job.Attack.MaskPresetId is not null && !maskPresetInvalid)
+            result.Warnings.Add(new("Mask list", "The built-in 1,000-pattern list contains nearly one trillion candidates. It can take a very long time, especially for encrypted documents or drives. Remembered hints can greatly reduce the search."));
         if (ruleFiles.Count > 0 && job.Attack.Kind is not (AttackFamilies.Dictionary or "hashcat:9")) Error("Rules", "This Hashcat release accepts rule files with dictionary or association attacks. Use inline left/right rules for hybrid or combinator.");
         if (job.Attack.Loopback && job.Attack.Kind != AttackFamilies.Dictionary) Error("Loopback", "Loopback is available with dictionary attacks.");
         if (job.Attack.Loopback && ruleFiles.Count == 0) Error("Loopback", "Loopback requires at least one dictionary rule file.");
@@ -69,7 +79,7 @@ public sealed class JobValidator(HashcatCommandBuilder builder)
         {
             var outputs = new[] { builder.GetOutputPath(job), builder.GetRestorePath(job), builder.GetPotfilePath(job) };
             if (File.Exists(outputs[0])) Error("Output", "Choose a new output file for each session. Reusing an existing file would mix recovered results. Use Restore to resume an existing session.");
-            var inputs = new[] { job.TargetPath, installation.ExecutablePath }.Concat(job.Attack.Wordlists).Concat(ruleFiles).Append(job.Attack.MaskFile ?? "").Where(p => !string.IsNullOrWhiteSpace(p)).Select(Path.GetFullPath).ToList();
+            var inputs = new[] { job.TargetPath, installation.ExecutablePath }.Concat(job.Attack.Wordlists).Concat(ruleFiles).Append(maskFile ?? "").Where(p => !string.IsNullOrWhiteSpace(p)).Select(Path.GetFullPath).ToList();
             if (outputs.Distinct(StringComparer.OrdinalIgnoreCase).Count() != outputs.Length) Error("Output", "Output, restore and potfile must use different paths.");
             foreach (var path in outputs)
             {

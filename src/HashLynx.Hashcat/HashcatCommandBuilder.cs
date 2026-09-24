@@ -9,10 +9,12 @@ public sealed class HashcatCommandBuilder
     private readonly string _stateDirectory;
     private readonly Dictionary<string, Func<AttackConfiguration, IReadOnlyList<string>>> _attackAdapters;
     public RulePresetCatalog RulePresets { get; }
-    public HashcatCommandBuilder(string? stateDirectory = null, IEnumerable<AttackArgumentAdapter>? additionalAttacks = null, RulePresetCatalog? rulePresets = null)
+    public MaskPresetCatalog MaskPresets { get; }
+    public HashcatCommandBuilder(string? stateDirectory = null, IEnumerable<AttackArgumentAdapter>? additionalAttacks = null, RulePresetCatalog? rulePresets = null, MaskPresetCatalog? maskPresets = null)
     {
         _stateDirectory = stateDirectory ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HashLynx", "jobs");
         RulePresets = rulePresets ?? new(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(_stateDirectory))!, "rule-presets"));
+        MaskPresets = maskPresets ?? new(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(_stateDirectory))!, "mask-presets"));
         _attackAdapters = new()
         {
             [AttackFamilies.Dictionary] = attack => attack.Wordlists.Select(FullPath).ToArray(),
@@ -38,8 +40,25 @@ public sealed class HashcatCommandBuilder
         return [RulePresets.GetRuleFilePath(attack.RulePresetId)];
     }
 
+    public string? ResolveMaskFile(AttackConfiguration attack)
+    {
+        if (attack.MaskPresetId is null) return attack.MaskFile;
+        ValidateMaskPreset(attack);
+        return MaskPresets.GetMaskFilePath(attack.MaskPresetId);
+    }
+
+    private static void ValidateMaskPreset(AttackConfiguration attack)
+    {
+        if (attack.Kind != AttackFamilies.Mask) throw new ArgumentException("Built-in mask lists are available for mask attacks only. Hybrid attacks require a custom mask.");
+        if (!string.IsNullOrEmpty(attack.Mask) || !string.IsNullOrEmpty(attack.MaskFile))
+            throw new ArgumentException("Choose a built-in mask list, a custom mask, or a mask file; do not combine mask sources.");
+        if (attack.Increment || attack.CustomCharsets.Count > 0)
+            throw new ArgumentException("The built-in mask list already defines its lengths and character sets. Turn off increment and clear custom charsets, or use a custom mask.");
+    }
+
     public HashcatCommand Build(HashcatInstallation installation, HashcatJob job)
     {
+        if (job.Attack.MaskPresetId is not null) ValidateMaskPreset(job.Attack);
         if (!installation.Capabilities.AttackModes.TryGetValue(job.Attack.Kind, out var attackId))
             throw new ArgumentException("The installed Hashcat release does not expose this attack family.");
         var args = new List<string>();
@@ -104,7 +123,11 @@ public sealed class HashcatCommandBuilder
     }
 
     private static string FullPath(string path) => Path.GetFullPath(path);
-    private static string MaskArgument(AttackConfiguration attack) => string.IsNullOrWhiteSpace(attack.MaskFile) ? attack.Mask ?? "" : FullPath(attack.MaskFile);
+    private string MaskArgument(AttackConfiguration attack)
+    {
+        var file = ResolveMaskFile(attack);
+        return string.IsNullOrWhiteSpace(file) ? attack.Mask ?? "" : FullPath(file);
+    }
 }
 
 public sealed record AttackArgumentAdapter(string Kind, Func<AttackConfiguration, IReadOnlyList<string>> BuildInputs);

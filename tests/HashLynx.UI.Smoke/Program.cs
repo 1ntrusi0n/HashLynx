@@ -32,7 +32,7 @@ internal static class Program
 }
 
 /// <summary>Loads the real app resources and every real page in an isolated local data directory.</summary>
-internal sealed class SmokeApplication(string output) : Application
+internal sealed partial class SmokeApplication(string output) : Application
 {
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -71,7 +71,10 @@ internal sealed class SmokeApplication(string output) : Application
             }
 
             await CheckSimpleWorkflowAsync(shell, store, window);
+            await CheckMaskSourcesAsync(shell, services, store, window);
             await CheckWordlistLibraryAsync(shell, services, store, window);
+            await CheckHintsAndQueueAsync(shell, store, window);
+            await CheckWordlistManagerAsync(shell, store, window);
             await CheckDefaultDeviceAsync(shell, store, window);
             await CheckManualCatalogAsync(shell, window, true);
             await CheckPopulatedJobsAsync(shell, window);
@@ -94,6 +97,7 @@ internal sealed class SmokeApplication(string output) : Application
             }
 
             shell.Attack.Family = 1;
+            shell.Attack.SelectedMaskSource = MaskSourceChoice.Text;
             shell.Attack.Mask = "?d?d?d?d";
             shell.Attack.ProfileName = "Synthetic smoke profile";
             await ((AsyncCommand)shell.Attack.SaveProfileCommand).ExecuteAsync(null);
@@ -110,9 +114,12 @@ internal sealed class SmokeApplication(string output) : Application
             Require(services.Notice.Contains("Hashcat", StringComparison.Ordinal), "Preflight without backend must explain configuration.");
             var backendPath = Environment.GetEnvironmentVariable("HASHLYNX_TEST_HASHCAT");
             if (File.Exists(backendPath)) await CheckConnectedWorkflowAsync(shell, services, window, backendPath);
+            if (File.Exists(backendPath)) await CheckAutomaticDeviceLifecycleAsync(services);
             if (File.Exists(backendPath)) await CheckNativeZipInspectorAsync(shell, services, window);
             var recoveryDevice = Environment.GetEnvironmentVariable("HASHLYNX_TEST_DEVICE");
             if (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice)) await CheckRecoveryWorkflowAsync(shell, services, window, recoveryDevice);
+            if (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice)) await CheckLiveQueueAsync(shell, services, window, recoveryDevice);
+            if (File.Exists(backendPath) && Environment.GetEnvironmentVariable("HASHLYNX_TEST_AUTO_DEVICE") == "1") await CheckLiveAutomaticDeviceAsync(services);
             foreach (var theme in new[] { "Light", "Dark", "System" })
             {
                 AppServices.ApplyTheme(theme);
@@ -121,7 +128,7 @@ internal sealed class SmokeApplication(string output) : Application
             }
             listener.Flush();
             Require(errors.Length == 0, "WPF binding failures: " + errors);
-            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all navigation pages; four attack families; four target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; saved wordlist import, restart, selection, Combinator/Hybrid, deduplication, missing files, safe removal and failed/corrupt save handling; populated manual catalog expansion, selection and scrolling; populated running/failed Jobs with progress updates; inactive history deletion, Undo, file retention and save-failure rollback; saved Hardware default, Basic selection, Expert overrides, restart persistence; preflight error handling; drive selection, extraction, cancellation, stale-result rejection and removal; native formats hidden from settings, legacy native overrides ignored, including PDF; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, automatic result loading, View recovered passwords navigation/reveal, stale-result clearing, native ZIP/RAR/7z/BitLocker/PDF extraction, confirmed automatic mode selection, and persistent extraction notes passed." : "") + (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice) ? " Real recovery: Start → Jobs → Results recovered the known NTLM fixture in Basic mode with the starter list, Normal preset, and saved Hardware default." : ""));
+            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all navigation pages; four attack families; four target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; saved wordlist import, restart, selection, Combinator/Hybrid, deduplication, missing files, safe removal and failed/corrupt save handling; populated manual catalog expansion, selection and scrolling; populated running/failed Jobs with progress updates; inactive history deletion, Undo, file retention and save-failure rollback; saved Hardware default, Basic selection, Expert overrides, restart persistence; preflight error handling; drive selection, extraction, cancellation, stale-result rejection and removal; native formats hidden from settings, legacy native overrides ignored, including PDF; hints preview and invalid input handling; saved queue pause, failure, retry, recovery skipping and shutdown; completion banners; wordlist manager metadata, names, checkbox binding and failed-save recovery; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, automatic result loading, View recovered passwords navigation/reveal, stale-result clearing, native ZIP/RAR/7z/BitLocker/PDF extraction, confirmed automatic mode selection, and persistent extraction notes passed." : "") + (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice) ? " Real recovery: Start → Jobs → Results recovered the known NTLM fixture in Basic mode with the starter list, Normal preset, and saved Hardware default." : ""));
             Console.WriteLine("WPF smoke passed. Screenshots and report: " + output);
             Shutdown(0);
         }
@@ -149,7 +156,7 @@ internal sealed class SmokeApplication(string output) : Application
         shell.Selected = shell.Navigation[0];
         await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
         var picker = Find<ComboBox>(window, "SavedWordlistPicker");
-        picker.SelectedItem = second;
+        picker.SelectedItem = attack.SavedWordlistEntries.Single(entry => entry.Path == second);
         Require(attack.Wordlists.SequenceEqual(new[] { second }), "Choosing a saved list in the real dropdown must change the Basic attack.");
         attack.ProfileName = "Saved wordlist smoke";
         await ((AsyncCommand)attack.SaveProfileCommand).ExecuteAsync(null);
@@ -170,12 +177,12 @@ internal sealed class SmokeApplication(string output) : Application
         Find<ComboBox>(window, "SavedRightWordlistPicker").SelectedItem = second;
         Require(attack.LeftWordlist == first && attack.RightWordlist == second, "Combinator must use saved paths independently on each side.");
         attack.Family = 2;
-        picker.SelectedItem = first;
+        picker.SelectedItem = attack.SavedWordlistEntries.Single(entry => entry.Path == first);
         Require(attack.Wordlists.SequenceEqual(new[] { first }), "Hybrid must use the same saved library.");
         attack.Family = 0;
-        picker.SelectedItem = second;
+        picker.SelectedItem = attack.SavedWordlistEntries.Single(entry => entry.Path == second);
         attack.Expert = true;
-        picker.SelectedItem = first;
+        picker.SelectedItem = attack.SavedWordlistEntries.Single(entry => entry.Path == first);
         Require(attack.Wordlists.SequenceEqual(new[] { second, first }), "Expert selection must append to the ordered attack list.");
         attack.SelectedWordlist = second;
         attack.RemoveWordlistCommand.Execute(null);
@@ -200,7 +207,7 @@ internal sealed class SmokeApplication(string output) : Application
         Require(attack.SavedWordlists.SequenceEqual(new[] { second }) && File.Exists(first) && attack.Wordlists.SequenceEqual(new[] { first }), "Forgetting must keep the source file and current attack.");
         File.Move(second, second + ".moved");
         attack.Expert = false;
-        picker.SelectedItem = second;
+        picker.SelectedItem = attack.SavedWordlistEntries.Single(entry => entry.Path == second);
         Require(attack.Wordlists.SequenceEqual(new[] { second }) && attack.WordlistSummary.Contains("missing"), "A missing saved file must be identified without silently using a different list.");
         Require((await store.LoadWordlistLibraryAsync()).Paths.SequenceEqual(new[] { second }), "Missing wordlists must remain in the library.");
         window.Width = 1040; window.Height = 700;
@@ -461,6 +468,7 @@ internal sealed class SmokeApplication(string output) : Application
         Require(!shell.Attack.Preview.Contains("--rules-file", StringComparison.Ordinal), "Switching back to No Rules must remove the selected preset from the command.");
         shell.Selected = shell.Navigation[0];
         shell.Attack.Family = 1;
+        shell.Attack.SelectedMaskSource = MaskSourceChoice.Text;
         shell.Attack.Mask = "?d?d?d?d";
         await ((AsyncCommand)shell.Attack.PreflightCommand).ExecuteAsync(null);
         Require(shell.Attack.Preflight.StartsWith("Ready to start", StringComparison.Ordinal), "Synthetic mask configuration must pass preflight: " + shell.Attack.Preflight);

@@ -1,5 +1,24 @@
 # Validation
 
+## Recovery workflows promotion to main - 2026-09-24
+
+- The user approved the tested recovery workflows for main. The merge includes Expert-only hints and queue-building controls, hardware verification and automatic device fallback, completion feedback, wordlist tools, Office/KeePass extractors, and the 1,000-pattern built-in mask list.
+- Restored the normal application title, `%LOCALAPPDATA%\HashLynx` workspace and `artifacts/publish/win-x64` destination. Normal settings and history resume. Earlier recovery-workflow and BitLocker test workspaces and executables remain separate; no histories, queues or results are automatically imported.
+- Restore and Release build passed with zero warnings/errors. All 480 standard tests passed (216 Extractors/Drives, 167 Hashcat, 44 Core, 53 Persistence); 13 opt-in cases were skipped without their required backend/device settings.
+- Connected WPF smoke passed with zero binding errors against disposable Hashcat 7.1.2 and CPU device 3. Checks include a real Basic dictionary recovery, queue exhaustion followed by recovery and skipping, session-specific results, Expert-mode hint staging, mask source/profile persistence, and cancellation during automatic device verification. Reports and screenshots are in ignored `artifacts/ui-smoke-main-workflows`.
+- The experiment's earlier automatic-selection regression also passed: empty device preferences selected CPU device 3 and recovered separate dictionary and built-in-mask fixtures. Source data, backend files and user recovery targets were not used as test inputs or modified.
+
+## Recovery workflows experiment - 2026-09-24
+
+- Work remains on `experiment/recovery-workflows`; the production branch, published executable and session data remain separate. The test publish is `artifacts/publish/recovery-workflows-test`, with an experimental title and `Experiments/RecoveryWorkflows` application data.
+- Restore and Release solution build passed with zero warnings/errors. Standard tests: 435 passed (216 Extractors/Drives, 122 Hashcat, 44 Core, 53 Persistence), with 12 opt-in test methods skipped when no backend/device is selected.
+- WPF checks passed with zero binding errors. New checks cover hint previews, invalid/stale numeric input, queue loading without automatic execution, pause/failure/retry/skipping, shutdown during pre-launch saving, completion banners, wordlist manager checkbox/name bindings, missing/reconnected files and failed metadata saves. Screenshots/reports are under ignored `artifacts/ui-smoke-workflows-final`.
+- Connected WPF checks passed against disposable Hashcat 7.1.2 and CPU device 3. A real three-step queue exhausted its first list, recovered the known synthetic password in its second attempt, and skipped the third. Separate session outputs contained only their own results, target snapshots survived source edits, the banner opened the actual result, and hints created a pending literal-word sequence without auto-starting. Existing Basic recovery and native inspector checks also passed. Evidence is in `artifacts/ui-smoke-workflows-connected`.
+- The hardware service independently recovered and verified a newly generated MD5 sample on CPU device 3. This validates basic device operation, not every kernel or long-running workload.
+- Three independently licensed Office fixtures matched upstream office2john records and recovered their known passwords on the same CPU. The original six-case shared-deadline batch timed out during subsequent KeePass setup after those three recoveries; integration cases were separated so each has its own bounded deadline. The subsequent three independent KeePass checks passed: generated KDBX 3 and real KDBX 4 Argon2d/Argon2id fixtures recovered their known passwords. KDBX 4 AES-KDF extraction matches its upstream record, but recovery requires mode 34301, absent from the local 7.1.2 release. See the extractor expansion notes for format limits.
+- Final UI review corrected selected-grid row contrast across dark/light themes. Windows notification-area balloons are implemented with generic text and opt-in settings; actual Windows notification delivery remains subject to system settings and has not been manually verified here.
+- No user targets, credentials or live devices were used for this experiment's automated recovery checks. Fixture records and licenses are development-only; research tools and backend binaries are excluded from commits and app publishing.
+
 ## BitLocker promotion to main - 2026-09-24
 
 - The user reported successful BitLocker testing and explicitly approved merging the drive reader into main. This is user-reported validation in addition to the previous automated live extraction/identification check; no new live-device reads or attacks were needed for the merge.

@@ -38,7 +38,7 @@ public sealed partial class AttackViewModel : ObservableObject
     public ObservableCollection<AttackProfile> Profiles { get; } = [];
     public AttackProfile? SelectedProfile { get => _selectedProfile; set => Set(ref _selectedProfile, value); }
     public string ProfileName { get => _profileName; set => Set(ref _profileName, value); }
-    public int Family { get => _family; set { if (Set(ref _family, value)) { Raise(nameof(UsesWordlists)); Raise(nameof(UsesMask)); Raise(nameof(IsHybrid)); Raise(nameof(IsCombinator)); Raise(nameof(IsDictionary)); Raise(nameof(UsesSingleRules)); RaiseRuleVisibility(); } } }
+    public int Family { get => _family; set { if (Set(ref _family, value)) { Raise(nameof(UsesWordlists)); Raise(nameof(UsesMask)); Raise(nameof(IsHybrid)); Raise(nameof(IsCombinator)); Raise(nameof(IsDictionary)); Raise(nameof(UsesSingleRules)); RaiseRuleVisibility(); RaiseMaskVisibility(); } } }
     public bool IsDictionary => Family == 0;
     public bool UsesSingleRules => Expert && Family != 1;
     public bool UsesWordlists => Family is 0 or 2;
@@ -136,12 +136,17 @@ public sealed partial class AttackViewModel : ObservableObject
         BundledRulesCommand = new RelayCommand(_ => AddFiles(Rules, services.Dialogs.OpenFiles("Bundled Hashcat rules", true, "Hashcat rules|*.rule|All files|*.*", Path.Combine(services.Installation?.DirectoryPath ?? "", "rules"))));
         DropRulesCommand = new RelayCommand(files => { if (files is string[] paths) AddFiles(Rules, paths); });
         RemoveRuleCommand = new RelayCommand(_ => { if (SelectedRule is { } item) Rules.Remove(item); });
-        BrowseMaskCommand = new RelayCommand(_ => { if (services.Dialogs.OpenFiles("Select a mask file", false, "Hashcat masks|*.hcmask|All files|*.*").FirstOrDefault() is { } path) { MaskFile = path; Raise(nameof(MaskFile)); } });
+        BrowseMaskCommand = new RelayCommand(_ => { if (services.Dialogs.OpenFiles("Select a mask file", false, "Hashcat masks|*.hcmask|All files|*.*").FirstOrDefault() is { } path) { MaskFile = path; SelectedMaskSource = MaskSourceChoice.File; Raise(nameof(MaskFile)); } });
         BrowseLeftCommand = new AsyncCommand(_ => BrowseCombinatorWordlistAsync(true), services.ReportError);
         BrowseRightCommand = new AsyncCommand(_ => BrowseCombinatorWordlistAsync(false), services.ReportError);
         BrowseOutputCommand = new RelayCommand(_ => { if (services.Dialogs.SaveFile("Results output", "recovered.txt") is { } path) { OutputPath = path; Raise(nameof(OutputPath)); } });
         PreflightCommand = new AsyncCommand(async _ => { await PrepareAsync(); }, ReportAttackError);
-        StartCommand = new AsyncCommand(async _ => { var job = await PrepareAsync(); if (job is null) return; await jobs.StartAsync(job); _showJobs(); _draftId = Guid.NewGuid(); Session = "hashlynx-" + _draftId.ToString("N")[..10]; }, ReportAttackError);
+        StartCommand = new AsyncCommand(async _ =>
+        {
+            var job = await PrepareAsync(); if (job is null) return;
+            try { var launch = jobs.StartAsync(job); _showJobs(); await launch; }
+            finally { if (jobs.Jobs.Any(item => item.Record.Id == job.Id)) ResetDraft(); }
+        }, ReportAttackError, _ => !services.IsComputeBusy && !services.IsQueueActive);
         CopyCommand = new RelayCommand(_ => services.Dialogs.Copy(Preview));
         SaveProfileCommand = new AsyncCommand(_ => SaveProfileAsync(), services.ReportError);
         LoadProfileCommand = new AsyncCommand(_ => { LoadProfile(); return Task.CompletedTask; }, services.ReportError);
@@ -182,7 +187,7 @@ public sealed partial class AttackViewModel : ObservableObject
     private HashcatJob BuildDraft(string targetPath)
     {
         var kinds = new[] { AttackFamilies.Dictionary, AttackFamilies.Mask, HybridDirection == 0 ? AttackFamilies.HybridWordlistMask : AttackFamilies.HybridMaskWordlist, AttackFamilies.Combinator };
-        var charsets = UsesMask ? new[] { Charset1, Charset2, Charset3, Charset4 }.Select((text, index) => (text, index)).Where(item => !string.IsNullOrEmpty(item.text)).ToDictionary(item => item.index + 1, item => item.text) : [];
+        var charsets = UsesCustomMaskOptions ? new[] { Charset1, Charset2, Charset3, Charset4 }.Select((text, index) => (text, index)).Where(item => !string.IsNullOrEmpty(item.text)).ToDictionary(item => item.index + 1, item => item.text) : [];
         var directory = _services.Store.Paths.GetJobDirectory(_draftId.ToString("N"));
         var session = Expert ? Session : "hashlynx-" + _draftId.ToString("N")[..10];
         return new HashcatJob
@@ -194,10 +199,11 @@ public sealed partial class AttackViewModel : ObservableObject
                 Wordlists = IsCombinator ? [LeftWordlist, RightWordlist] : UsesWordlists ? Wordlists.ToList() : [],
                 RulePresetId = ShowPresets ? SelectedRulePreset.Id : null,
                 RuleFiles = ShowCustomRules ? Rules.ToList() : [],
-                Mask = UsesMask ? Mask : null,
-                MaskFile = UsesMask && !string.IsNullOrWhiteSpace(MaskFile) ? MaskFile : null,
+                Mask = EffectiveMask,
+                MaskFile = EffectiveMaskFile,
+                MaskPresetId = EffectiveMaskPresetId,
                 CustomCharsets = charsets,
-                Increment = UsesMask && Increment,
+                Increment = UsesCustomMaskOptions && Increment,
                 IncrementMinimum = IncrementMinimum,
                 IncrementMaximum = IncrementMaximum,
                 LeftRule = UsesSingleRules ? LeftRule : null,
@@ -231,7 +237,7 @@ public sealed partial class AttackViewModel : ObservableObject
             ExtraArguments = Expert ? ExtraArguments.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).ToList() : []
         };
     }
-    private async Task<HashcatJob?> PrepareAsync()
+    private async Task<HashcatJob?> PrepareAsync(AttackConfiguration? attackOverride = null)
     {
         Inspector.ValidationMessage = ""; AttackErrors = ""; CommonErrors = "";
         StartFeedback = "Checking the target and attack settings…";
@@ -243,10 +249,12 @@ public sealed partial class AttackViewModel : ObservableObject
         if (Inspector.SelectedMode is null) await Inspector.AnalyzeAsync();
         if (targetRevision != Inspector.TargetRevision || target != Inspector.PreparedTargetPath) throw new InvalidOperationException("The target changed during the checks. Start again to use your current target.");
         var job = BuildDraft(target);
+        var originalDraftSnapshot = JsonSerializer.Serialize(job);
+        if (attackOverride is not null) job.Attack = CloneAttack(attackOverride);
         var configurationSnapshot = JsonSerializer.Serialize(job);
         var validation = _services.Backend.ValidateJob(backend, job);
         var targetFields = new[] { "Hashcat executable", "Target", "Hash mode" };
-        var attackFields = new[] { "Attack", "Wordlists", "Wordlist", "Rule file", "Rules", "Mask", "Increment", "Charset", "Loopback" };
+        var attackFields = new[] { "Attack", "Wordlists", "Wordlist", "Rule file", "Rules", "Mask", "Mask file", "Mask preset", "Increment", "Charset", "Loopback" };
         Inspector.ValidationMessage = string.Join(Environment.NewLine, validation.Errors.Where(item => targetFields.Contains(item.Field)).Select(item => item.Message));
         AttackErrors = string.Join(Environment.NewLine, validation.Errors.Where(item => attackFields.Contains(item.Field)).Select(item => item.Message));
         CommonErrors = string.Join(Environment.NewLine, validation.Errors.Where(item => !targetFields.Contains(item.Field) && !attackFields.Contains(item.Field)).Select(item => item.Message));
@@ -258,7 +266,9 @@ public sealed partial class AttackViewModel : ObservableObject
             var available = await _services.Backend.GetDevicesAsync(backend, _services.LifetimeToken);
             if (job.Options.Devices.Any(id => available.All(device => device.Id != id))) { Preflight = "Devices: at least one selected device is unavailable. Refresh Hardware and check IDs."; StartFeedback = Preflight; return null; }
         }
-        if (!ReferenceEquals(backend, _services.Installation) || targetRevision != Inspector.TargetRevision || target != Inspector.PreparedTargetPath || configurationSnapshot != JsonSerializer.Serialize(BuildDraft(target))) throw new InvalidOperationException("The target, backend, or attack settings changed during the checks. Start again to use the current configuration.");
+        var currentDraft = BuildDraft(target);
+        if (attackOverride is not null) currentDraft.Attack = CloneAttack(attackOverride);
+        if (!ReferenceEquals(backend, _services.Installation) || targetRevision != Inspector.TargetRevision || target != Inspector.PreparedTargetPath || originalDraftSnapshot != JsonSerializer.Serialize(BuildDraft(target)) || configurationSnapshot != JsonSerializer.Serialize(currentDraft)) throw new InvalidOperationException("The target, backend, or attack settings changed during the checks. Start again to use the current configuration.");
         Preview = _services.Backend.BuildCommand(backend, job).Preview;
         Preflight = "Ready to start. Target, attack inputs, session and output paths passed preflight." + (Preflight.Length == 0 ? "" : Environment.NewLine + Preflight);
         StartFeedback = "Ready to start. Target and attack settings passed the automatic checks.";
@@ -283,6 +293,7 @@ public sealed partial class AttackViewModel : ObservableObject
         if (attack.Kind != AttackFamilies.Dictionary && (attack.RulePresetId is not null || attack.RuleFiles.Count > 0)) throw new InvalidOperationException("This profile attaches Dictionary rules to another attack family. The saved profile has been preserved; create a Dictionary profile to use those rules.");
         var preset = attack.RulePresetId is null ? null : _rulePresets.GetById(attack.RulePresetId);
         if (preset is not null && attack.RuleFiles.Count > 0) throw new InvalidOperationException("This profile mixes a rule preset with custom rule files. Its saved data has been preserved; use a profile with one rule source.");
+        ValidateMaskProfile(attack);
         Family = attack.Kind switch { AttackFamilies.Mask => 1, AttackFamilies.HybridWordlistMask or AttackFamilies.HybridMaskWordlist => 2, AttackFamilies.Combinator => 3, _ => 0 };
         UseCustomRules = IsDictionary && attack.RuleFiles.Count > 0;
         SelectedRulePreset = RulePresets.Single(choice => choice.Id == preset?.Id);
@@ -290,6 +301,7 @@ public sealed partial class AttackViewModel : ObservableObject
         Wordlists.Clear(); foreach (var path in attack.Wordlists) Wordlists.Add(path); Rules.Clear(); foreach (var path in attack.RuleFiles) Rules.Add(path);
         LeftWordlist = attack.Wordlists.ElementAtOrDefault(0) ?? ""; RightWordlist = attack.Wordlists.ElementAtOrDefault(1) ?? "";
         Mask = attack.Mask ?? ""; MaskFile = attack.MaskFile ?? ""; Charset1 = attack.CustomCharsets.GetValueOrDefault(1) ?? ""; Charset2 = attack.CustomCharsets.GetValueOrDefault(2) ?? ""; Charset3 = attack.CustomCharsets.GetValueOrDefault(3) ?? ""; Charset4 = attack.CustomCharsets.GetValueOrDefault(4) ?? "";
+        LoadMaskProfile(attack);
         Increment = attack.Increment; IncrementMinimum = attack.IncrementMinimum; IncrementMaximum = attack.IncrementMaximum; LeftRule = attack.LeftRule ?? ""; RightRule = attack.RightRule ?? ""; Loopback = attack.Loopback;
         OptimizedKernel = job.Options.OptimizedKernel; Workload = job.Options.WorkloadProfile; Devices = string.Join(",", job.Options.Devices); DisablePotfile = job.Options.DisablePotfile; PotfilePath = job.Options.PotfilePath ?? ""; Temperature = job.Options.TemperatureAbort?.ToString() ?? ""; ExtraArguments = string.Join(Environment.NewLine, job.Options.ExtraArguments);
         var managedPotfile = Path.Combine(_services.Store.Paths.ResultsDirectory, "hashlynx.potfile");

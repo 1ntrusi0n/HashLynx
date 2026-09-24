@@ -5,6 +5,7 @@
   </ResourceDictionary.MergedDictionaries>
   <DataTemplate DataType="{x:Type vm:AttackViewModel}"><views:AttackView/></DataTemplate>
   <DataTemplate DataType="{x:Type vm:JobsViewModel}"><views:JobsView/></DataTemplate>
+  <DataTemplate DataType="{x:Type vm:RecoveryQueueViewModel}"><views:RecoveryQueueView/></DataTemplate>
   <DataTemplate DataType="{x:Type vm:ResultsViewModel}"><views:ResultsView/></DataTemplate>
   <DataTemplate DataType="{x:Type vm:HardwareViewModel}"><views:HardwareView/></DataTemplate>
   <DataTemplate DataType="{x:Type vm:ExtractorsViewModel}"><views:ExtractorsView/></DataTemplate>

@@ -17,3 +17,10 @@
 - Use cancellation and asynchronous I/O for long operations. Do not block the WPF dispatcher. Handle process errors and absence of dependencies as actionable UI states.
 - Do not add telemetry or external transmission of targets, credentials, encrypted files, wordlists, or job data.
 - Build for .NET 10 / `net10.0-windows`. Prefer native WPF and BCL components over large dependencies.
+
+## Recovery workflows
+
+- Recovery workflows are approved for `main`. Publish the normal application to `artifacts/publish/win-x64` and use the normal `%LOCALAPPDATA%/HashLynx` workspace.
+- Preserve earlier test builds and data under `artifacts/publish/recovery-workflows-test` and `HashLynx/Experiments/RecoveryWorkflows`. Do not automatically import their settings, queues, session histories or results into the normal workspace.
+- Password hints and queue-building controls on Attack belong to Expert mode. The Queue page and saved sequences remain accessible in Basic mode.
+- Queues never auto-start after loading, stop on failures, and use separate step output files with a private per-sequence potfile. Shutdown/pause must be rechecked after asynchronous persistence and before launching any process.
