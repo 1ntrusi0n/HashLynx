@@ -19,6 +19,8 @@ public sealed class AttackConfiguration
     public string? RulePresetId { get; set; }
     public string? Mask { get; set; }
     public string? MaskFile { get; set; }
+    /// <summary>A stable built-in mask list ID. Null preserves custom mask and legacy file behavior.</summary>
+    public string? MaskPresetId { get; set; }
     public Dictionary<int, string> CustomCharsets { get; set; } = [];
     public bool Increment { get; set; }
     public int IncrementMinimum { get; set; } = 1;

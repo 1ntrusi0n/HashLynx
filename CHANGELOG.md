@@ -6,15 +6,17 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ### Fixed
 
+- Automatic device selection now runs a disposable known-answer check before starting a new recovery, skips failing devices, and permits a verified CPU fallback. Explicit Hardware/Expert selections remain authoritative. Verification can be stopped, queue pause/shutdown prevents late launches, and retries get fresh session paths.
 - Session results now come only from that session's output file. Shared potfile matches are no longer attributed to other sessions, including failed or exhausted runs. New sessions cannot reuse an existing or reserved output file.
 - Recovery device choices can now be saved in Hardware and are honored in Basic mode and after restart. The Attack page shows the effective selection; explicit Expert IDs override the saved default. This avoids falling back to a failing automatic GPU choice when a working CPU was only saved in an attack profile.
 - Populated Jobs pages now bind progress and other display-only values one-way, avoiding read-only property exceptions during job selection and status updates.
-- Explicit backend device IDs now also allow all OpenCL device types, so selecting a CPU is honored even when a GPU is present. The selected IDs still restrict execution; automatic device selection is unchanged.
+- Explicit backend device IDs now also allow all OpenCL device types, so selecting a CPU is honored even when a GPU is present. The selected IDs still restrict execution.
 - Backend failure messages distinguish invalid OpenCL queries, missing runtimes, unavailable devices, and rejected old runtimes while excluding private target and credential data.
 - Opening the populated manual hash-mode catalog no longer interrupts page layout or makes the scrollbar disappear. Read-only catalog labels now use one-way bindings, and WPF smoke checks exercise expansion, scrolling, mode selection, and installed-catalog search.
 
 ### Added
 
+- Built-in **Common patterns (1,000)** mask list with a versioned preset ID, exclusive built-in/text/file selection, profile and queue persistence, exact candidate count, source/license documentation and reproducible generation. Based on Hashcat's historical structure-only list; it is not presented as a universal password-frequency ranking. Jobs clarifies that mask-list progress describes the current mask.
 - Recovery-workflows experiment on a separate branch and application workspace, with an isolated test publish folder.
 - Remembered-password hints: word/phrase attempts, optional Quick/Normal variations, fixed beginning/ending masks across explicit total lengths, candidate previews and counts, literal question-mark handling and stale-preview rejection.
 - Persistent sequential attack queues with target snapshots, one output/session per step, private per-sequence potfiles, recovery skipping, failure/stop pause, explicit restart resume, retry, skip, reordering and checkpoint reconciliation. Compute checks and jobs cannot overlap through the UI.

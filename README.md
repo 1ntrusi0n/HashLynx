@@ -18,6 +18,7 @@ HashLynx is an independent GUI frontend. Hashcat is a separate third-party proje
 - Password hints with candidate previews, fixed beginning/ending patterns, remembered-word variations, and persistent sequential attack queues.
 - Dictionary, Mask, both Hybrid directions, and Combinator configurations. Dictionary attacks include original Quick, Normal, Heavy, and Super rule presets, an 848-word starter list, and clickable rule examples. Expert mode supports custom rule files and multiple wordlists.
 - Mask/custom charset validation, increment settings, workload/device/temperature controls, named sessions, potfile/output options, and a constrained Expert argument extension field.
+- Built-in **Common patterns (1,000)** for Mask attacks, alongside custom masks and files. Sources, corpus limits, and regeneration are documented in [built-in masks](docs/built-in-masks.md).
 - Automatic validation when starting recovery, with run options, a copyable command preview, and a separate Preflight button in Expert mode. Commands execute with `ProcessStartInfo.ArgumentList`, never through a shell.
 - Asynchronous jobs, parsed JSON status metrics, stop, job history, interrupted-job detection, and restore when a saved Hashcat restore file exists.
 - Session-specific recovered results, an all-sessions view, plaintext hide/reveal, copy, and export. Completion banners link to results; optional Windows notifications keep passwords hidden. Hardware discovery includes a bounded known-answer recovery test per device.
@@ -105,6 +106,10 @@ To clean up history, select an inactive session on **Jobs** and click **Delete s
 
 Basic mode manages devices, session names, result paths, and other run settings. Enable **Expert mode** to select custom rule files, adjust run options, or use the separate Preflight and command-preview controls. Existing profiles with custom rules or advanced options open Expert mode so their saved behavior remains visible. Mask, Hybrid, and Combinator attacks remain available for users who need them.
 
+With no device preference saved, **checked automatic selection** verifies a small local sample before starting. It tries available GPUs, then CPUs and other devices, and uses the first device that actually recovers the sample. Failed devices are skipped without driver overrides. The successful choice is cached while the app stays open and the reported hardware remains unchanged; refresh Hardware or a failed recovery clears it. A sample check can take up to 90 seconds per device. Jobs shows the check and allows Stop; queue pause and app shutdown cancel pending checks. Explicit Hardware defaults and Expert IDs keep their existing behavior. A passed sample does not guarantee support or speed for every hash type.
+
+For a Mask attack, select **Built-in common structures (1,000 masks)** to start without supplying a file. This versioned selection adapts Hashcat's historical RockYou structure list and contains no passwords. Its combined search approaches one trillion candidates, so remembered hints can be much faster. The picker displays the exact count and supported lengths. Use **Write a mask** or **Use my mask file** for a narrower search; Hybrid keeps its own mask choice. Hashcat's progress/ETA applies to the current mask rather than the whole list. See [research, licensing and limitations](docs/built-in-masks.md).
+
 ### Built-in rules and wordlists
 
 A wordlist supplies starting words; rules transform each word into password candidates. For example, the rule `c$1$!` turns `river` into `River1!`. Click **?** beside the rule preset for an explanation and more examples.
@@ -178,6 +183,7 @@ This experiment stores mutable data under `%LOCALAPPDATA%\HashLynx\Experiments\R
 | `results/` | Default result files and potfile |
 | `cache/` | Versioned mode catalog and backend support workspace |
 | `rule-presets/` | Materialized, versioned built-in rule files |
+| `mask-presets/` | Materialized, versioned built-in mask lists and license comments |
 | `wordlists/` | Materialized bundled starter wordlist |
 | `logs/` | Sanitized JSON diagnostic events |
 

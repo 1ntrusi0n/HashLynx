@@ -49,11 +49,12 @@ public sealed class HardwareViewModel : ObservableObject
         AutomaticCommand = new AsyncCommand(async _ =>
         {
             await services.SetDefaultDevicesAsync([]);
-            Status = "Automatic selection restored for new jobs. Explicit Expert device IDs still override it.";
+            Status = "Automatic selection will verify a sample and choose a working device before recovery. Explicit Expert device IDs still override it.";
         }, services.ReportError);
         RefreshCommand = new AsyncCommand(async _ =>
         {
             Status = "Querying Hashcat backend information…";
+            services.DeviceSelection.Invalidate();
             var devices = await services.Backend.GetDevicesAsync(services.RequireBackend(), services.LifetimeToken, refresh: true);
             Devices.Clear(); foreach (var device in devices) Devices.Add(device);
             Status = $"{Devices.Count} backend device(s) reported. Choose a recovery default below, or override device IDs in Expert run options. Refresh and reselect after driver changes. Live statistics appear in Jobs.";
@@ -75,6 +76,7 @@ public sealed class HardwareViewModel : ObservableObject
             _checkCancellation = CancellationTokenSource.CreateLinkedTokenSource(_services.LifetimeToken);
             TestStatus = $"Testing device {device.Id}: {device.Name}. Preparing a sample and checking the recovered answer; allow up to 90 seconds.";
             var result = await _hardwareCheck.CheckAsync(installation, device.Id, _checkCancellation.Token);
+            if (!result.Passed) _services.DeviceSelection.Invalidate(installation);
             TestStatus = ReferenceEquals(installation, _services.Installation)
                 ? $"Device {device.Id}: {device.Name} - {result.Message} ({result.Elapsed.TotalSeconds:0.0} seconds)"
                 : "The backend changed during this check. Refresh devices and test the current installation.";

@@ -2,4 +2,5 @@
   <PropertyGroup><TargetFramework>net10.0-windows</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
   <ItemGroup><ProjectReference Include="../HashLynx.Core/HashLynx.Core.csproj" /></ItemGroup>
   <ItemGroup><EmbeddedResource Include="RulePresets/*.rule" LogicalName="HashLynx.Hashcat.RulePresets.%(Filename)%(Extension)" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="MaskPresets/*.hcmask" LogicalName="HashLynx.Hashcat.MaskPresets.%(Filename)%(Extension)" /></ItemGroup>
 </Project>

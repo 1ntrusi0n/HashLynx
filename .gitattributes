@@ -5,6 +5,8 @@
 *.json text eol=lf
 *.yml text eol=lf
 *.rule text eol=lf
+*.hcmask text eol=lf
+scripts/mask-sources/HASHCAT-LICENSE.txt text eol=lf
 assets/wordlists/*.txt text eol=lf
 *.ps1 text eol=crlf
 *.png binary

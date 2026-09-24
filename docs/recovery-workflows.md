@@ -18,11 +18,12 @@ Review the Queue page and choose **Start queue**. Only one compute operation run
 
 **Pause after current step** lets the active attempt finish. To stop it too, use **Stop** in Jobs; this pauses the queue before terminating the process. Restart always loads the queue paused. Interrupted steps stay blocked for review. Restore their sessions in Jobs when a checkpoint exists, then start the queue to reconcile the result; or choose **Retry step** to create a new attempt from its beginning, keeping prior results. **Skip step**, **Move step up/down**, and **Remove sequence** are available while idle. Reordering is limited to pending steps within a sequence. Removal keeps its sessions and local files.
 
-The target is copied at enqueue time. Wordlists, custom-rule files and mask files remain references and must remain available; changing their contents changes a later attempt. Queue persistence is atomic and versioned, and malformed or future-schema data is preserved and reported. A failed save stops advancement. A pause or app close during pre-launch saving is rechecked before any process starts.
+The target is copied at enqueue time. Wordlists, custom-rule files and mask files remain references and must remain available; changing their contents changes a later attempt. Built-in mask lists retain a versioned preset ID and are materialized automatically. Queue persistence is atomic and versioned, and malformed or future-schema data is preserved and reported. A failed save stops advancement. A pause or app close during pre-launch saving is rechecked before any process starts. When no device is selected, automatic hardware verification happens before recovery; pausing during that check cancels it and leaves an interrupted step that can be retried.
 
 ## Other additions
 
 - **Hardware > Test recovery on this device** performs a bounded known-answer check, separate from real jobs and results. See [hardware checks](hardware-check.md).
+- **Mask > Built-in common structures (1,000 masks)** works without a mask file. The picker shows candidate count and a short mask explanation. See [selection, sources and limits](built-in-masks.md).
 - Completion banners offer result/session navigation and explain partial recovery, exhaustion and failure. **Settings > Show Windows completion notifications** enables transient Windows notification-area balloons; Windows notification settings can suppress their display. Notifications contain generic status only, with no passwords, candidate text or targets.
 - **Manage wordlist library** adds names, counts, location repair and new-file combine/filter/deduplicate tools. See [wordlist tools](wordlist-tools.md).
 - Encrypted Office and KeePass files use built-in readers through Encrypted File. See [selected formats and limitations](extractor-expansion.md).
@@ -36,4 +37,4 @@ The target is copied at enqueue time. Wordlists, custom-rule files and mask file
 5. Test a selected hardware device, rename a saved wordlist, and create a combined list at a new path.
 6. Try your own supported Office/KeePass test files; retain their originals and compare recovered passwords with what you set.
 
-Use `scripts/build.ps1 -Publish` for restore/build/unit tests/UI checks and the separate experiment publish. Backend-enabled tests must use a disposable Hashcat release and an explicitly selected test device. Automated checks use synthetic/public fixture passwords, never the user's recovery targets.
+Use `scripts/build.ps1 -Publish` for restore/build/unit tests/UI checks and the separate experiment publish. Backend-enabled tests must use a disposable Hashcat release; existing recovery tests use an explicitly selected device. The additional `HASHLYNX_TEST_AUTO_DEVICE=1` WPF check exercises discovery and verified automatic selection with empty device preferences. Automated checks use synthetic/public fixture passwords, never the user's recovery targets.

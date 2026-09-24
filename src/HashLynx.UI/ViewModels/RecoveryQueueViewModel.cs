@@ -123,7 +123,7 @@ public sealed class RecoveryQueueViewModel : ObservableObject
         return Task.CompletedTask;
     }
 
-    public void RequestPause() { _pause = true; Status = "Queue will pause after the current step. To stop that step too, use Stop on Jobs."; }
+    public void RequestPause() { _pause = true; _jobs.CancelPendingQueueLaunch(); Status = "Queue will pause after the current step. To stop that step too, use Stop on Jobs."; }
     public Task PauseBeforeStopAsync() { RequestPause(); return Task.CompletedTask; }
     public async Task ShutdownAsync() { RequestPause(); await _worker; }
     public Task WaitForIdleAsync() => _worker;
@@ -151,7 +151,8 @@ public sealed class RecoveryQueueViewModel : ObservableObject
                 try { record = await _run(Clone(step.Configuration)); }
                 catch (Exception exception)
                 {
-                    step.State = RecoveryStepState.Failed; step.Message = "Could not finish this step. Review the application message and session diagnostic.";
+                    step.State = exception is OperationCanceledException ? RecoveryStepState.Interrupted : RecoveryStepState.Failed;
+                    step.Message = exception is OperationCanceledException ? "Stopped before recovery started. Retry when ready." : "Could not finish this step. Review the application message and session diagnostic.";
                     _services.ReportError(exception); _pause = true; await SaveAsync(); Refresh();
                     Status = "Queue paused because the step could not finish."; break;
                 }

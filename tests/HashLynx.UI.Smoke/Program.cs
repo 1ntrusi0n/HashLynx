@@ -71,6 +71,7 @@ internal sealed partial class SmokeApplication(string output) : Application
             }
 
             await CheckSimpleWorkflowAsync(shell, store, window);
+            await CheckMaskSourcesAsync(shell, services, store, window);
             await CheckWordlistLibraryAsync(shell, services, store, window);
             await CheckHintsAndQueueAsync(shell, store, window);
             await CheckWordlistManagerAsync(shell, store, window);
@@ -96,6 +97,7 @@ internal sealed partial class SmokeApplication(string output) : Application
             }
 
             shell.Attack.Family = 1;
+            shell.Attack.SelectedMaskSource = MaskSourceChoice.Text;
             shell.Attack.Mask = "?d?d?d?d";
             shell.Attack.ProfileName = "Synthetic smoke profile";
             await ((AsyncCommand)shell.Attack.SaveProfileCommand).ExecuteAsync(null);
@@ -112,10 +114,12 @@ internal sealed partial class SmokeApplication(string output) : Application
             Require(services.Notice.Contains("Hashcat", StringComparison.Ordinal), "Preflight without backend must explain configuration.");
             var backendPath = Environment.GetEnvironmentVariable("HASHLYNX_TEST_HASHCAT");
             if (File.Exists(backendPath)) await CheckConnectedWorkflowAsync(shell, services, window, backendPath);
+            if (File.Exists(backendPath)) await CheckAutomaticDeviceLifecycleAsync(services);
             if (File.Exists(backendPath)) await CheckNativeZipInspectorAsync(shell, services, window);
             var recoveryDevice = Environment.GetEnvironmentVariable("HASHLYNX_TEST_DEVICE");
             if (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice)) await CheckRecoveryWorkflowAsync(shell, services, window, recoveryDevice);
             if (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice)) await CheckLiveQueueAsync(shell, services, window, recoveryDevice);
+            if (File.Exists(backendPath) && Environment.GetEnvironmentVariable("HASHLYNX_TEST_AUTO_DEVICE") == "1") await CheckLiveAutomaticDeviceAsync(services);
             foreach (var theme in new[] { "Light", "Dark", "System" })
             {
                 AppServices.ApplyTheme(theme);
@@ -464,6 +468,7 @@ internal sealed partial class SmokeApplication(string output) : Application
         Require(!shell.Attack.Preview.Contains("--rules-file", StringComparison.Ordinal), "Switching back to No Rules must remove the selected preset from the command.");
         shell.Selected = shell.Navigation[0];
         shell.Attack.Family = 1;
+        shell.Attack.SelectedMaskSource = MaskSourceChoice.Text;
         shell.Attack.Mask = "?d?d?d?d";
         await ((AsyncCommand)shell.Attack.PreflightCommand).ExecuteAsync(null);
         Require(shell.Attack.Preflight.StartsWith("Ready to start", StringComparison.Ordinal), "Synthetic mask configuration must pass preflight: " + shell.Attack.Preflight);

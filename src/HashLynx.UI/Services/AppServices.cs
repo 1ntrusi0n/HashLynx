@@ -20,6 +20,7 @@ public sealed class AppServices : ObservableObject
     public void CancelPendingOperations() => _lifetime.Cancel();
     public PersistenceStore Store { get; }
     public HashcatFacade Backend { get; }
+    public HashcatDeviceSelectionService DeviceSelection { get; }
     public DialogService Dialogs { get; } = new();
     public IBitLockerDriveService BitLockerDrives { get; }
     public StructuredLog Log { get; }
@@ -42,7 +43,7 @@ public sealed class AppServices : ObservableObject
     public event Action? BackendChanged;
     public event Action? DefaultDevicesChanged;
     public string DefaultDeviceSummary => Settings.DefaultDeviceIds.Count == 0
-        ? "Hashcat automatic selection"
+        ? "Checked automatic selection (finds a working device before recovery)"
         : "Device " + string.Join(", ", Settings.DefaultDeviceIds);
     public async Task SetDefaultDevicesAsync(IEnumerable<int> deviceIds)
     {
@@ -52,14 +53,17 @@ public sealed class AppServices : ObservableObject
         Settings.DefaultDeviceIds = selected;
         try { await Store.SaveSettingsAsync(Settings, LifetimeToken); }
         catch { Settings.DefaultDeviceIds = previous; throw; }
+        DeviceSelection.Invalidate();
         DefaultDevicesChanged?.Invoke();
         Notice = $"Recovery default saved: {DefaultDeviceSummary}. Applies to new attacks, including Basic mode.";
     }
-    public AppServices(PersistenceStore? store = null, HashcatFacade? backend = null, IBitLockerDriveService? bitLockerDrives = null)
+    public AppServices(PersistenceStore? store = null, HashcatFacade? backend = null, IBitLockerDriveService? bitLockerDrives = null, HashcatDeviceSelectionService? deviceSelection = null)
     {
         Store = store ?? new PersistenceStore();
         BitLockerDrives = bitLockerDrives ?? new DriveReaderClient();
         Backend = backend ?? new HashcatFacade(Store.Paths.CacheDirectory);
+        DeviceSelection = deviceSelection ?? new HashcatDeviceSelectionService(Store.Paths.CacheDirectory,
+            (installation, token) => Backend.GetDevicesAsync(installation, token, refresh: true));
         Log = new StructuredLog(Store.Paths);
         ErrorDetails = $"Sanitized logs: {Store.Paths.LogsDirectory}";
         Backend.Diagnostic += diagnostic => _ = WriteLogSafelyAsync("backend.diagnostic", "The backend reported a parsing or discovery diagnostic.");
@@ -78,6 +82,7 @@ public sealed class AppServices : ObservableObject
     {
         Notice = "Preparing and validating the local backend. The first run may take a moment…";
         Installation = await Backend.ProbeAsync(executable, LifetimeToken);
+        DeviceSelection.Invalidate();
         Settings.HashcatDirectory = Installation.DirectoryPath;
         RebuildExtractors();
         Notice = $"Connected to Hashcat {Installation.Version}. Your recovery workflow stays on this computer.";

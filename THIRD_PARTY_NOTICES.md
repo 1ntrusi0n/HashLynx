@@ -6,6 +6,10 @@ HashLynx is an independent application. Hashcat is a separate third-party projec
 
 [Hashcat](https://hashcat.net/hashcat/) is an MIT-licensed backend. Users separately obtain an official release and configure it. The local `hashcat/` folder is ignored by Git and is not included in this repository or the application publish output. Hashcat's own `docs/license.txt` and `docs/license_libs/` contain its copyright and dependency notices; do not remove or replace them.
 
+## Built-in common mask list
+
+The versioned `common-1000-v1` mask asset adapts the first 1,000 distinct structures in Hashcat v7.1.2's [RockYou mask list](https://github.com/hashcat/hashcat/blob/c75f446c44cd3f0742035a1394416c39bee5ea8f/masks/rockyou-2-1800.hcmask). These are character-class patterns, not passwords. The original MIT license, Copyright (c) 2015-2025 Jens Steube, is retained in full in the embedded and materialized `.hcmask` file and in [the source snapshot license](scripts/mask-sources/HASHCAT-LICENSE.txt). The offline selection recipe and source limitations are described in [built-in masks](docs/built-in-masks.md).
+
 ## External extractors
 
 John the Ripper and utilities such as pdf2john, zip2john, rar2john, and 7z2john are optional external programs. Some are GPL-licensed and may have additional component licenses. Obtain and review the license for the exact tool/version you use. HashLynx does not redistribute them or their source. Python and Perl runtimes also remain separately installed tools with their own licenses.
