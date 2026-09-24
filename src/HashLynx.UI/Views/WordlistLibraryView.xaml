@@ -1,0 +1,39 @@
+<UserControl x:Class="HashLynx.UI.Views.WordlistLibraryView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <StackPanel Margin="0,10,0,5">
+    <TextBlock Text="Saved wordlist library" Style="{StaticResource SectionTitle}"/>
+    <TextBlock Text="Give lists friendly names, repair moved files, or create a combined list. Counts update in the background." Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+    <DataGrid x:Name="WordlistLibraryGrid" ItemsSource="{Binding Entries}" SelectedItem="{Binding Selected}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="False" MinHeight="90" MaxHeight="240" SelectionMode="Single" AutomationProperties.Name="Saved wordlist library">
+      <DataGrid.Columns>
+        <DataGridTemplateColumn Header="Use" Width="45"><DataGridTemplateColumn.CellTemplate><DataTemplate><CheckBox x:Name="IncludeWordlistCheckBox" IsChecked="{Binding Include, UpdateSourceTrigger=PropertyChanged}" Margin="8,0,0,0" VerticalAlignment="Center" AutomationProperties.Name="Include wordlist in new list"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+        <DataGridTextColumn Header="Name" Binding="{Binding DisplayName, Mode=OneWay}" IsReadOnly="True" Width="*"/>
+        <DataGridTextColumn Header="Size" Binding="{Binding Size, Mode=OneWay}" IsReadOnly="True" Width="95"/>
+        <DataGridTextColumn Header="Lines" Binding="{Binding Lines, Mode=OneWay}" IsReadOnly="True" Width="110"/>
+        <DataGridTextColumn Header="Status" Binding="{Binding Availability, Mode=OneWay}" IsReadOnly="True" Width="190"/>
+      </DataGrid.Columns>
+    </DataGrid>
+    <TextBlock Text="{Binding Selected.Path}" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,5,0,8"/>
+    <DockPanel>
+      <Button x:Name="SaveWordlistNameButton" Content="Save name" Command="{Binding RenameCommand}" DockPanel.Dock="Right" Margin="8,0,0,0"/>
+      <TextBox x:Name="WordlistFriendlyName" Text="{Binding FriendlyName, UpdateSourceTrigger=PropertyChanged}" MaxLength="200" AutomationProperties.Name="Wordlist friendly name" ToolTip="Select a saved list and give it a friendly name"/>
+    </DockPanel>
+    <WrapPanel Margin="0,10,0,8">
+      <Button Content="Add lists..." Command="{Binding AddCommand}"/>
+      <Button Content="Refresh counts" Command="{Binding RefreshCommand}"/>
+      <Button Content="Repair location..." Command="{Binding RepairCommand}"/>
+      <Button Content="Forget selected" Command="{Binding ForgetCommand}" ToolTip="Keeps the file on disk and any current attack selection"/>
+      <Button Content="Cancel" Command="{Binding CancelCommand}"/>
+    </WrapPanel>
+    <TextBlock Text="Create a new list" Style="{StaticResource Label}"/>
+    <TextBlock Text="Check Use beside one or more lists. Original files stay unchanged. Duplicate removal sorts the new list; leaving it off preserves input order." Style="{StaticResource Muted}" TextWrapping="Wrap"/>
+    <CheckBox Content="Remove exact duplicate lines (case sensitive)" IsChecked="{Binding RemoveDuplicates}"/>
+    <WrapPanel Margin="0,4,0,8">
+      <TextBlock Text="Minimum length" VerticalAlignment="Center" Margin="0,0,8,0"/>
+      <TextBox Text="{Binding MinimumLength, UpdateSourceTrigger=PropertyChanged}" Width="70" Margin="0,0,16,0" AutomationProperties.Name="Minimum wordlist byte length"/>
+      <TextBlock Text="Maximum length" VerticalAlignment="Center" Margin="0,0,8,0"/>
+      <TextBox Text="{Binding MaximumLength, UpdateSourceTrigger=PropertyChanged}" Width="85" Margin="0,0,16,0" AutomationProperties.Name="Maximum wordlist byte length"/>
+      <Button Content="Save new wordlist..." Command="{Binding TransformCommand}" Style="{StaticResource PrimaryButton}"/>
+    </WrapPanel>
+    <TextBlock Text="Length is measured in bytes: ASCII letters, digits and symbols use one byte; some Unicode characters use more. UTF-8 and legacy single-byte lists are supported. Large lists use temporary disk space while sorting." Style="{StaticResource Muted}" TextWrapping="Wrap"/>
+    <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Foreground="{DynamicResource AccentBrush}" Margin="0,10,0,0"/>
+  </StackPanel>
+</UserControl>

@@ -141,7 +141,7 @@ public sealed partial class AttackViewModel : ObservableObject
         BrowseRightCommand = new AsyncCommand(_ => BrowseCombinatorWordlistAsync(false), services.ReportError);
         BrowseOutputCommand = new RelayCommand(_ => { if (services.Dialogs.SaveFile("Results output", "recovered.txt") is { } path) { OutputPath = path; Raise(nameof(OutputPath)); } });
         PreflightCommand = new AsyncCommand(async _ => { await PrepareAsync(); }, ReportAttackError);
-        StartCommand = new AsyncCommand(async _ => { var job = await PrepareAsync(); if (job is null) return; await jobs.StartAsync(job); _showJobs(); _draftId = Guid.NewGuid(); Session = "hashlynx-" + _draftId.ToString("N")[..10]; }, ReportAttackError);
+        StartCommand = new AsyncCommand(async _ => { var job = await PrepareAsync(); if (job is null) return; await jobs.StartAsync(job); _showJobs(); ResetDraft(); }, ReportAttackError, _ => !services.IsComputeBusy && !services.IsQueueActive);
         CopyCommand = new RelayCommand(_ => services.Dialogs.Copy(Preview));
         SaveProfileCommand = new AsyncCommand(_ => SaveProfileAsync(), services.ReportError);
         LoadProfileCommand = new AsyncCommand(_ => { LoadProfile(); return Task.CompletedTask; }, services.ReportError);
@@ -231,7 +231,7 @@ public sealed partial class AttackViewModel : ObservableObject
             ExtraArguments = Expert ? ExtraArguments.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).ToList() : []
         };
     }
-    private async Task<HashcatJob?> PrepareAsync()
+    private async Task<HashcatJob?> PrepareAsync(AttackConfiguration? attackOverride = null)
     {
         Inspector.ValidationMessage = ""; AttackErrors = ""; CommonErrors = "";
         StartFeedback = "Checking the target and attack settings…";
@@ -243,6 +243,8 @@ public sealed partial class AttackViewModel : ObservableObject
         if (Inspector.SelectedMode is null) await Inspector.AnalyzeAsync();
         if (targetRevision != Inspector.TargetRevision || target != Inspector.PreparedTargetPath) throw new InvalidOperationException("The target changed during the checks. Start again to use your current target.");
         var job = BuildDraft(target);
+        var originalDraftSnapshot = JsonSerializer.Serialize(job);
+        if (attackOverride is not null) job.Attack = CloneAttack(attackOverride);
         var configurationSnapshot = JsonSerializer.Serialize(job);
         var validation = _services.Backend.ValidateJob(backend, job);
         var targetFields = new[] { "Hashcat executable", "Target", "Hash mode" };
@@ -258,7 +260,9 @@ public sealed partial class AttackViewModel : ObservableObject
             var available = await _services.Backend.GetDevicesAsync(backend, _services.LifetimeToken);
             if (job.Options.Devices.Any(id => available.All(device => device.Id != id))) { Preflight = "Devices: at least one selected device is unavailable. Refresh Hardware and check IDs."; StartFeedback = Preflight; return null; }
         }
-        if (!ReferenceEquals(backend, _services.Installation) || targetRevision != Inspector.TargetRevision || target != Inspector.PreparedTargetPath || configurationSnapshot != JsonSerializer.Serialize(BuildDraft(target))) throw new InvalidOperationException("The target, backend, or attack settings changed during the checks. Start again to use the current configuration.");
+        var currentDraft = BuildDraft(target);
+        if (attackOverride is not null) currentDraft.Attack = CloneAttack(attackOverride);
+        if (!ReferenceEquals(backend, _services.Installation) || targetRevision != Inspector.TargetRevision || target != Inspector.PreparedTargetPath || originalDraftSnapshot != JsonSerializer.Serialize(BuildDraft(target)) || configurationSnapshot != JsonSerializer.Serialize(currentDraft)) throw new InvalidOperationException("The target, backend, or attack settings changed during the checks. Start again to use the current configuration.");
         Preview = _services.Backend.BuildCommand(backend, job).Preview;
         Preflight = "Ready to start. Target, attack inputs, session and output paths passed preflight." + (Preflight.Length == 0 ? "" : Environment.NewLine + Preflight);
         StartFeedback = "Ready to start. Target and attack settings passed the automatic checks.";

@@ -1,0 +1,39 @@
+# Recovery workflows experiment
+
+Branch: `experiment/recovery-workflows`. The test build is `artifacts/publish/recovery-workflows-test/HashLynx.exe` and has a visible experimental title. It uses `%LOCALAPPDATA%\HashLynx\Experiments\RecoveryWorkflows`. Normal settings and saved wordlist references are copied on first launch when readable, but outputs, queues, targets, potfiles and history are separate. Existing production and BitLocker-experiment data is preserved.
+
+## Password hints
+
+On Attack, select a target and expand **What do you remember?**. Enter remembered words/phrases, one per line. They are tried unchanged by default; optional Quick and Normal steps add variations. A separate pattern describes a known beginning, unknown middle, known ending and inclusive total length range. Known text is literal (including `?`); generated masks preserve both ends for every length instead of shortening the suffix with increment mode.
+
+For example, beginning `Summer`, ending `!`, total length 11 and digits in the middle produces 10,000 candidates from `Summer0000!` through `Summer9999!`. An optional ending can be expressed as a second sequence without that ending. These are explicit patterns, not natural-language guesses. Pattern text currently supports printable ASCII; word/phrase files preserve UTF-8 and spaces. There are at most 200 distinct words, 128 UTF-8 bytes per word, total pattern lengths 1-32, and at most 16 lengths per preview.
+
+Preview shows attempts, example candidates and a candidate-application estimate. Rule tiers overlap, so counts are an effort ceiling, not distinct guesses or a recovery probability. Very large estimates are called out. Changing any hint, including invalid numeric text, invalidates the preview. Queueing rechecks the preview after asynchronous target validation. Generated candidate files stay in the local `hints/` directory for replay; they are not written to diagnostic logs. Expert options that reinterpret, truncate or skip the previewed candidates are rejected. Autohex decoding is disabled for generated word files so a literal `$HEX[...]` is still tried literally.
+
+## Queue behavior
+
+**Add current attack to queue** snapshots the selected target and attack configuration. To append to a sequence, select it on Queue first and enable **Append current attack** on Attack. Appending requires the same target bytes and mode and an unstarted sequence. **Queue No Rules, Quick, Normal** creates a three-step dictionary sequence from the selected wordlist(s), without custom rules or loopback. The hints wizard builds its own sequence.
+
+Review the Queue page and choose **Start queue**. Only one compute operation runs at a time. Steps have independent sessions, checkpoints and result files; a sequence shares its own potfile to skip targets recovered by earlier steps. It does not import the normal app's shared recovery cache. Exhaustion advances to the next step, complete recovery skips the rest of that sequence, and errors/stops pause the queue. Other sequences retain their own targets and caches.
+
+**Pause after current step** lets the active attempt finish. To stop it too, use **Stop** in Jobs; this pauses the queue before terminating the process. Restart always loads the queue paused. Interrupted steps stay blocked for review. Restore their sessions in Jobs when a checkpoint exists, then start the queue to reconcile the result; or choose **Retry step** to create a new attempt from its beginning, keeping prior results. **Skip step**, **Move step up/down**, and **Remove sequence** are available while idle. Reordering is limited to pending steps within a sequence. Removal keeps its sessions and local files.
+
+The target is copied at enqueue time. Wordlists, custom-rule files and mask files remain references and must remain available; changing their contents changes a later attempt. Queue persistence is atomic and versioned, and malformed or future-schema data is preserved and reported. A failed save stops advancement. A pause or app close during pre-launch saving is rechecked before any process starts.
+
+## Other additions
+
+- **Hardware > Test recovery on this device** performs a bounded known-answer check, separate from real jobs and results. See [hardware checks](hardware-check.md).
+- Completion banners offer result/session navigation and explain partial recovery, exhaustion and failure. **Settings > Show Windows completion notifications** enables transient Windows notification-area balloons; Windows notification settings can suppress their display. Notifications contain generic status only, with no passwords, candidate text or targets.
+- **Manage wordlist library** adds names, counts, location repair and new-file combine/filter/deduplicate tools. See [wordlist tools](wordlist-tools.md).
+- Encrypted Office and KeePass files use built-in readers through Encrypted File. See [selected formats and limitations](extractor-expansion.md).
+
+## Suggested manual checks
+
+1. Open the experimental executable and confirm the experimental window title and Settings data directory.
+2. Choose a test target with a known password, enter matching hints, preview, add to Queue and start it. Confirm the recovered password in its session results.
+3. Queue a list that misses the password followed by one that contains it. Check that the first exhausts, the second recovers, and later steps in that sequence are skipped.
+4. Pause between attempts and restart the app. Confirm the saved queue waits for you to start it.
+5. Test a selected hardware device, rename a saved wordlist, and create a combined list at a new path.
+6. Try your own supported Office/KeePass test files; retain their originals and compare recovered passwords with what you set.
+
+Use `scripts/build.ps1 -Publish` for restore/build/unit tests/UI checks and the separate experiment publish. Backend-enabled tests must use a disposable Hashcat release and an explicitly selected test device. Automated checks use synthetic/public fixture passwords, never the user's recovery targets.

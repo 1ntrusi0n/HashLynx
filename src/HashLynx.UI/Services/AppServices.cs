@@ -24,6 +24,16 @@ public sealed class AppServices : ObservableObject
     public IBitLockerDriveService BitLockerDrives { get; }
     public StructuredLog Log { get; }
     public AppSettings Settings { get; private set; } = new();
+    private bool _computeBusy;
+    public bool IsComputeBusy => _computeBusy;
+    public bool IsQueueActive { get; set; }
+    public bool TryBeginComputeOperation()
+    {
+        if (_computeBusy || LifetimeToken.IsCancellationRequested) return false;
+        _computeBusy = true; Raise(nameof(IsComputeBusy)); System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+        return true;
+    }
+    public void EndComputeOperation() { _computeBusy = false; Raise(nameof(IsComputeBusy)); System.Windows.Input.CommandManager.InvalidateRequerySuggested(); }
     public HashcatInstallation? Installation { get => _installation; private set { Set(ref _installation, value); Raise(nameof(BackendLabel)); } }
     public string BackendLabel => Installation is null ? "Backend not configured" : $"Hashcat {Installation.Version} · local";
     public string Notice { get => _notice; set => Set(ref _notice, value); }

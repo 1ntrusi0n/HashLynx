@@ -11,6 +11,8 @@ public sealed class SettingsViewModel : ObservableObject
     private string _hashcatDirectory = "", _outputDirectory = "", _theme = "Dark", _status = "";
     private int _workload = 2, _interval = 2;
     private bool _expert;
+    private bool _completionNotifications;
+    public bool CompletionNotifications { get => _completionNotifications; set => Set(ref _completionNotifications, value); }
     public string HashcatDirectory { get => _hashcatDirectory; set => Set(ref _hashcatDirectory, value); }
     public string OutputDirectory { get => _outputDirectory; set => Set(ref _outputDirectory, value); }
     public string Theme { get => _theme; set { if (Set(ref _theme, value)) AppServices.ApplyTheme(value); } }
@@ -43,6 +45,7 @@ public sealed class SettingsViewModel : ObservableObject
         OutputDirectory = _services.Settings.DefaultOutputDirectory;
         Theme = _services.Settings.Theme; Workload = _services.Settings.DefaultWorkloadProfile;
         Expert = _services.Settings.ExpertMode; Interval = _services.Settings.StatusIntervalSeconds;
+        CompletionNotifications = _services.Settings.CompletionNotifications;
         Status = _services.BackendLabel;
     }
     private async Task ValidateAsync()
@@ -58,6 +61,7 @@ public sealed class SettingsViewModel : ObservableObject
         var settings = _services.Settings;
         settings.HashcatDirectory = HashcatDirectory; settings.DefaultOutputDirectory = OutputDirectory;
         settings.Theme = Theme; settings.DefaultWorkloadProfile = Workload; settings.ExpertMode = Expert; settings.StatusIntervalSeconds = Interval;
+        settings.CompletionNotifications = CompletionNotifications;
         await _services.Store.SaveSettingsAsync(settings);
         Status = "Preferences saved. Attack defaults apply to the next application launch.";
         _services.Notice = "Settings saved locally.";

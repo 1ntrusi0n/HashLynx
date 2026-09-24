@@ -15,6 +15,14 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ### Added
 
+- Recovery-workflows experiment on a separate branch and application workspace, with an isolated test publish folder.
+- Remembered-password hints: word/phrase attempts, optional Quick/Normal variations, fixed beginning/ending masks across explicit total lengths, candidate previews and counts, literal question-mark handling and stale-preview rejection.
+- Persistent sequential attack queues with target snapshots, one output/session per step, private per-sequence potfiles, recovery skipping, failure/stop pause, explicit restart resume, retry, skip, reordering and checkpoint reconciliation. Compute checks and jobs cannot overlap through the UI.
+- Per-device hardware recovery check using a fresh synthetic target and verified recovered bytes, cancellation, bounded runtime and sanitized diagnostics.
+- Completion banners with direct result/session navigation, partial-recovery and exhaustion explanations, and optional Windows notification-area balloons with no passwords or target details.
+- Wordlist friendly names, background cached line counts, missing-file repair, and cancellable byte-preserving combine/filter/deduplication using bounded-memory external sorting. All transformations publish a new file and preserve originals.
+- Independent native Microsoft Office encrypted OOXML and KeePass KDBX 3/4 extractors, selected after a survey of the upstream 2john inventory. Format limits, backend compatibility, primary sources and fixture licenses are documented; no GPL implementation is embedded.
+
 - BitLocker Drive target picker and a separate, user-approved Windows administrator reader. Reads bounded partition metadata through read-only device handles, validates the helper connection, checks repeated extraction for changes, and feeds existing Hashcat identification/recovery. No image creation or device modification is required.
 - Promoted direct BitLocker extraction into the normal application after user-confirmed device testing. Restored the standard app title, data directory and publish path; earlier experimental data is preserved separately. The helper is included in build/publish output.
 - Live-device support for zeroed legacy BitLocker sector-size fields using authoritative Windows geometry, with mismatched sizes rejected and raw-image validation retained.

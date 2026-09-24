@@ -20,6 +20,8 @@ public static class FileTypeInspector
 
     public static string Identify(ReadOnlySpan<byte> header)
     {
+        if (header.StartsWith((ReadOnlySpan<byte>)[0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])) return "office";
+        if (header.StartsWith((ReadOnlySpan<byte>)[0x03, 0xd9, 0xa2, 0x9a, 0x67, 0xfb, 0x4b, 0xb5])) return "keepass";
         if (header.StartsWith("PK\u0003\u0004"u8) || header.StartsWith("PK\u0005\u0006"u8) || header.StartsWith("PK\u0007\u0008"u8)) return "zip";
         if (header.StartsWith((ReadOnlySpan<byte>)[0x52, 0x61, 0x72, 0x21, 0x1a, 0x07, 0x00]) || header.StartsWith((ReadOnlySpan<byte>)[0x52, 0x61, 0x72, 0x21, 0x1a, 0x07, 0x01, 0x00])) return "rar";
         if (header.StartsWith((ReadOnlySpan<byte>)[0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c])) return "7z";

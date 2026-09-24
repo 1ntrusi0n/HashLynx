@@ -9,6 +9,7 @@ public sealed class AppSettings
     public int DefaultWorkloadProfile { get; set; } = 2;
     public List<int> DefaultDeviceIds { get; set; } = [];
     public bool ExpertMode { get; set; }
+    public bool CompletionNotifications { get; set; }
     public int StatusIntervalSeconds { get; set; } = 2;
     public Dictionary<string, ExtractorToolSettings> ExtractorTools { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }

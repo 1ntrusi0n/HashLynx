@@ -1,0 +1,11 @@
+Public KeePass conversion test fixtures from the Hashcat project.
+Source revision: 9ac24bfebb404100c4d4bd98bf2f755e720cc9d9
+Source directory:
+https://github.com/hashcat/hashcat/tree/9ac24bfebb404100c4d4bd98bf2f755e720cc9d9/tools/2hashcat_tests/keepass
+
+The .kdbx databases and matching .hash records are public known-password
+development fixtures, not user recovery data. The source README identifies
+the reference converter as keepass2john. The converter itself is not shipped.
+
+The original Hashcat MIT license and copyright notice are in LICENSE.txt.
+These files are used by tests only and are not included in app publish output.

@@ -17,3 +17,9 @@
 - Use cancellation and asynchronous I/O for long operations. Do not block the WPF dispatcher. Handle process errors and absence of dependencies as actionable UI states.
 - Do not add telemetry or external transmission of targets, credentials, encrypted files, wordlists, or job data.
 - Build for .NET 10 / `net10.0-windows`. Prefer native WPF and BCL components over large dependencies.
+
+## Recovery workflows experiment
+
+- Keep this work on `experiment/recovery-workflows` until the user approves merging. Publish to `artifacts/publish/recovery-workflows-test`; preserve the normal executable and normal app history.
+- Experimental app data belongs under `HashLynx/Experiments/RecoveryWorkflows`; only initial settings and saved wordlist references may be copied from the normal workspace. Do not merge session histories automatically.
+- Queues never auto-start after loading, stop on failures, and use separate step output files with a private per-sequence potfile. Shutdown/pause must be rechecked after asynchronous persistence and before launching any process.

@@ -38,6 +38,18 @@ public sealed class PersistenceStore
     public Task<List<AttackProfile>> LoadProfilesAsync(CancellationToken ct = default) => ReadAsync("profiles.json", () => new List<AttackProfile>(), ct);
     public Task SaveProfilesAsync(IReadOnlyList<AttackProfile> profiles, CancellationToken ct = default) => WriteAsync("profiles.json", profiles, ct);
 
+    public async Task<RecoveryQueueDocument> LoadQueueAsync(CancellationToken ct = default)
+    {
+        var queue = await ReadAsync("queue.json", () => new RecoveryQueueDocument(), ct).ConfigureAwait(false);
+        queue.Validate();
+        return queue;
+    }
+    public Task SaveQueueAsync(RecoveryQueueDocument queue, CancellationToken ct = default)
+    {
+        queue.Validate();
+        return WriteAsync("queue.json", queue, ct);
+    }
+
     public async Task<WordlistLibrary> LoadWordlistLibraryAsync(CancellationToken ct = default)
     {
         var library = await ReadAsync("wordlists.json", () => new WordlistLibrary(), ct).ConfigureAwait(false);

@@ -100,3 +100,9 @@ The .NET SDK/runtime and WPF are Microsoft/.NET Foundation projects with their o
 ## Branding
 
 The supplied HashLynx PNG logos are retained as project branding. `assets/branding/logo.ico` is a size-converted version of `logo.png`, containing 16, 24, 32, 48, 64, 128, and 256 pixel images. Pillow was used as a local development conversion tool; it is not a runtime dependency or redistributed with HashLynx.
+
+## Office and KeePass extraction
+
+The Office CFB/OFFCRYPTO and KeePass KDBX readers are independent C# implementations based on the published format specifications and Hashcat output contracts. No John implementation is copied or translated into the application. Research references and supported profiles are listed in [the extractor expansion notes](docs/extractor-expansion.md).
+
+Public Office test documents from msoffcrypto-tool retain their original MIT license and additional BSD notice in `tests/HashLynx.Extractors.Tests/Fixtures/Office/LICENSE.txt` and `NOTICE.txt`. Public KeePass databases and expected Hashcat records retain the Hashcat MIT license in `tests/HashLynx.Extractors.Tests/Fixtures/KeePass/LICENSE.txt` and source attribution in `NOTICE.txt`. These fixtures are development-only and are not included in application publish output. Reference converters and research tools are not redistributed.

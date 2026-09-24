@@ -29,7 +29,8 @@ public sealed class ExtractorRegistry
             // Built-in formats always use native readers. Preserve old configuration in storage,
             // but do not let an invisible legacy tool path override them.
             new PdfHashExtractor(), new ZipHashExtractor(),
-            new RarHashExtractor(), new SevenZipHashExtractor(), new BitLockerHashExtractor()
+            new RarHashExtractor(), new SevenZipHashExtractor(), new BitLockerHashExtractor(),
+            new OfficeHashExtractor(), new KeePassHashExtractor()
         ]);
     }
 }

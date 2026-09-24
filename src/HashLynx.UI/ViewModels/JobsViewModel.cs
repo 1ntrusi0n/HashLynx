@@ -38,6 +38,7 @@ public sealed class JobsViewModel : ObservableObject
     private readonly AppServices _services;
     private readonly Dictionary<Guid, HashcatRunningJob> _running = [];
     private readonly List<Task> _observers = [];
+    private readonly Dictionary<Guid, TaskCompletionSource<JobRecord>> _waiters = [];
     private Task _periodicSave = Task.CompletedTask;
     private DateTimeOffset _lastPersisted = DateTimeOffset.UtcNow;
     private readonly DispatcherTimer _clock;
@@ -56,6 +57,8 @@ public sealed class JobsViewModel : ObservableObject
     public ICommand DeleteCommand { get; }
     public ICommand UndoDeleteCommand { get; }
     public event Func<JobViewModel, Task>? ResultsRequested;
+    public event Action<JobViewModel>? JobFinished;
+    public Func<Task>? BeforeStop { get; set; }
     public JobsViewModel(AppServices services)
     {
         _services = services;
@@ -63,8 +66,8 @@ public sealed class JobsViewModel : ObservableObject
         DeleteCommand = new AsyncCommand(_ => DeleteSelectedAsync(), services.ReportError, _ => Selected is { } job && CanDelete(job));
         UndoDeleteCommand = new AsyncCommand(_ => UndoDeleteAsync(), services.ReportError, _ => _deleted.Count > 0);
         PauseCommand = Control(HashcatControl.Pause); ResumeCommand = Control(HashcatControl.Resume); CheckpointCommand = Control(HashcatControl.Checkpoint); RefreshCommand = Control(HashcatControl.Status);
-        StopCommand = new AsyncCommand(async _ => { if (Selected is { } job && _running.TryGetValue(job.Record.Id, out var running) && services.Dialogs.Confirm("Stop this recovery job? A checkpoint stop is available separately if you want Hashcat to finish the current checkpoint.", "Stop job")) await running.StopAsync(); }, services.ReportError, _ => Selected is not null && _running.ContainsKey(Selected.Record.Id));
-        RestoreCommand = new AsyncCommand(async _ => { if (Selected is { CanRestore: true } job) await LaunchAsync(job, true); }, services.ReportError, _ => Selected?.CanRestore == true);
+        StopCommand = new AsyncCommand(async _ => { if (Selected is { } job && _running.TryGetValue(job.Record.Id, out var running) && services.Dialogs.Confirm("Stop this recovery job? A checkpoint stop is available separately if you want Hashcat to finish the current checkpoint.", "Stop job")) { if (BeforeStop is { } pause) await pause(); await running.StopAsync(); } }, services.ReportError, _ => Selected is not null && _running.ContainsKey(Selected.Record.Id));
+        RestoreCommand = new AsyncCommand(async _ => { if (Selected is { CanRestore: true } job) await LaunchAsync(job, true); }, services.ReportError, _ => Selected?.CanRestore == true && !services.IsComputeBusy && !services.IsQueueActive);
         _clock = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => Tick(), Dispatcher.CurrentDispatcher);
         _clock.Start();
     }
@@ -110,8 +113,10 @@ public sealed class JobsViewModel : ObservableObject
         }
         Selected = Jobs.FirstOrDefault();
     }
-    public async Task StartAsync(HashcatJob configuration)
+    public async Task StartAsync(HashcatJob configuration, bool queued = false)
     {
+        if (_services.IsQueueActive && !queued) throw new InvalidOperationException("Pause the queue before starting a separate recovery job.");
+        if (_services.IsComputeBusy) throw new InvalidOperationException("Another recovery or hardware test is running. Wait for it to finish or add this attack to the queue.");
         var output = _services.Backend.Commands.GetOutputPath(configuration);
         if (Jobs.Any(job => string.Equals(_services.Backend.Commands.GetOutputPath(job.Record.Configuration), output, StringComparison.OrdinalIgnoreCase)))
             throw new InvalidOperationException("Another session already uses this output file. Choose a different output file so each session keeps its own results.");
@@ -120,9 +125,17 @@ public sealed class JobsViewModel : ObservableObject
         Jobs.Insert(0, viewModel); Selected = viewModel;
         await LaunchAsync(viewModel, false);
     }
+    public async Task<JobRecord> StartAndWaitAsync(HashcatJob configuration)
+    {
+        var completion = new TaskCompletionSource<JobRecord>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _waiters.Add(configuration.Id, completion);
+        try { await StartAsync(configuration, queued: true); return await completion.Task; }
+        finally { _waiters.Remove(configuration.Id); }
+    }
     private async Task LaunchAsync(JobViewModel job, bool restore)
     {
         var backend = _services.RequireBackend();
+        if (!_services.TryBeginComputeOperation()) throw new InvalidOperationException("Another recovery or hardware test is running.");
         var progress = new Progress<HashcatEvent>(item =>
         {
             if (item.Status is not null) job.Record.LatestStatus = item.Status;
@@ -134,9 +147,10 @@ public sealed class JobsViewModel : ObservableObject
             job.Refresh();
         });
         HashcatRunningJob running;
-        try { running = restore ? _services.Backend.RestoreJob(backend, job.Record.Configuration, progress) : _services.Backend.StartJob(backend, job.Record.Configuration, progress); }
+        try { running = restore ? _services.Backend.RestoreJob(backend, job.Record.Configuration, progress, _services.LifetimeToken) : _services.Backend.StartJob(backend, job.Record.Configuration, progress, _services.LifetimeToken); }
         catch
         {
+            _services.EndComputeOperation();
             job.Record.State = JobState.Failed; job.Record.Diagnostic = "Hashcat could not start. Validate the backend and review the preflight inputs."; job.Record.FinishedAt = DateTimeOffset.UtcNow; job.Refresh();
             await SaveAsync(); throw;
         }
@@ -164,7 +178,25 @@ public sealed class JobsViewModel : ObservableObject
         {
             _running.Remove(job.Record.Id); job.Record.FinishedAt = DateTimeOffset.UtcNow; job.Refresh(); Raise(nameof(HasRunning)); CommandManager.InvalidateRequerySuggested();
             if (job.HasRecovered) _services.Notice = "Passwords recovered. On Jobs, select the session and choose View recovered passwords.";
-            try { await SaveAsync(); await _services.Log.WriteAsync("job.finished", "A local recovery session finished."); } catch (Exception exception) { _services.ReportError(exception); }
+            Exception? persistenceError = null;
+            try
+            {
+                await SaveAsync();
+            }
+            catch (Exception exception)
+            {
+                persistenceError = exception;
+                _services.ReportError(exception);
+            }
+            try { JobFinished?.Invoke(job); }
+            catch (Exception exception) { _services.ReportError(exception); }
+            finally { _services.EndComputeOperation(); }
+            if (_waiters.TryGetValue(job.Record.Id, out var waiter))
+            {
+                if (persistenceError is null) waiter.TrySetResult(job.Record);
+                else waiter.TrySetException(persistenceError);
+            }
+            try { await _services.Log.WriteAsync("job.finished", "A local recovery session finished."); } catch (Exception exception) { _services.ReportError(exception); }
         }
     }
     public Task SaveAsync() => _services.Store.SaveJobsAsync(Jobs.Select(job => job.Record).ToList());
