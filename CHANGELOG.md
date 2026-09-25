@@ -6,20 +6,26 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ### Changed
 
+- Readiness checklist text now uses green for ready items, red for missing inputs or required corrections, and amber for pending analysis/device checks, with readable colors in Light, Dark and System themes.
+- Jobs, completion banners and queue feedback use plain-language outcomes and contextual actions for hardware, backend setup, attack inputs and another attempt. Technical diagnostics are expandable. Completion claims require session-owned output; previously cached matches link explicitly to earlier results.
 - Promoted the tested recovery workflows into `main`, restoring the normal application title, `%LOCALAPPDATA%\HashLynx` workspace and `artifacts/publish/win-x64` output. Normal settings and history resume; earlier experiment data and test builds remain separate without automatic import.
 - The Attack page's **What do you remember?** and **Run several attempts** sections now appear only in Expert mode. The Queue page and existing sequences remain available in Basic mode.
 - Successful extraction notes remain visible in Target Inspector. A uniquely suggested extractor mode is automatically selected only when confirmed by installed Hashcat identification. Tagged WinZip AES lines have a bounded larger analysis allowance for inline ciphertext.
-- New Dictionary attacks default to **No Rules**. The dropdown also offers Quick, Normal, Heavy, and Super; No Rules passes no rule file to Hashcat. Saved preset/custom-rule choices are preserved, and no-rule profiles load with No Rules selected.
+- New Dictionary attacks default to **No Rules**. The dropdown also offers Quick, Normal, Heavy, and Super; No Rules passes no rule file to Hashcat. Saved queue configurations retain their preset/custom-rule choices.
 - Start recovery performs target identification and preflight automatically; ambiguous hashes still require an explicit mode choice.
 - Run options, custom rule files, separate Preflight, and command preview are Expert controls. Basic mode uses managed defaults and excludes hidden Expert settings from jobs.
-- Legacy profiles preserve their custom/no-rule behavior and reveal advanced settings in Expert mode. Edits during asynchronous launch checks require a fresh Start.
+- Edits during asynchronous launch checks require a fresh Start.
 - Large local source rule and wordlist collections are excluded from Git and publish output; the compact original assets ship in the application.
+
+### Removed
+
+- Saved attack profile controls and the **Use local full list** shortcut from Attack. Earlier profile files remain untouched for compatibility. The saved wordlist library, **Add wordlists…** and **Use starter** remain available; local source collections are preserved.
 
 ### Fixed
 
 - Automatic device selection now runs a disposable known-answer check before starting a new recovery, skips failing devices, and permits a verified CPU fallback. Explicit Hardware/Expert selections remain authoritative. Verification can be stopped, queue pause/shutdown prevents late launches, and retries get fresh session paths.
 - Session results now come only from that session's output file. Shared potfile matches are no longer attributed to other sessions, including failed or exhausted runs. New sessions cannot reuse an existing or reserved output file.
-- Recovery device choices can now be saved in Hardware and are honored in Basic mode and after restart. The Attack page shows the effective selection; explicit Expert IDs override the saved default. This avoids falling back to a failing automatic GPU choice when a working CPU was only saved in an attack profile.
+- Recovery device choices can now be saved in Hardware and are honored in Basic mode and after restart. The Attack page shows the effective selection; explicit Expert IDs override the saved default.
 - Populated Jobs pages now bind progress and other display-only values one-way, avoiding read-only property exceptions during job selection and status updates.
 - Explicit backend device IDs now also allow all OpenCL device types, so selecting a CPU is honored even when a GPU is present. The selected IDs still restrict execution.
 - Backend failure messages distinguish invalid OpenCL queries, missing runtimes, unavailable devices, and rejected old runtimes while excluding private target and credential data.
@@ -27,7 +33,8 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ### Added
 
-- Built-in **Common patterns (1,000)** mask list with a versioned preset ID, exclusive built-in/text/file selection, profile and queue persistence, exact candidate count, source/license documentation and reproducible generation. Based on Hashcat's historical structure-only list; it is not presented as a universal password-frequency ranking. Jobs clarifies that mask-list progress describes the current mask.
+- Live target/input/device readiness checklist with links to the relevant controls, missing-file checks and explicit refresh. Draft checks run off the WPF dispatcher, with cancellation and stale-result rejection.
+- Built-in **Common patterns (1,000)** mask list with a versioned preset ID, exclusive built-in/text/file selection, queue persistence, exact candidate count, source/license documentation and reproducible generation. Based on Hashcat's historical structure-only list; it is not presented as a universal password-frequency ranking. Jobs clarifies that mask-list progress describes the current mask.
 - Remembered-password hints: word/phrase attempts, optional Quick/Normal variations, fixed beginning/ending masks across explicit total lengths, candidate previews and counts, literal question-mark handling and stale-preview rejection.
 - Persistent sequential attack queues with target snapshots, one output/session per step, private per-sequence potfiles, recovery skipping, failure/stop pause, explicit restart resume, retry, skip, reordering and checkpoint reconciliation. Compute checks and jobs cannot overlap through the UI.
 - Per-device hardware recovery check using a fresh synthetic target and verified recovered bytes, cancellation, bounded runtime and sanitized diagnostics.
@@ -50,8 +57,8 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 - **Show All Sessions Results** combines the results of sessions in history with a source Session column. CSV exports include session names and IDs; deleted sessions are excluded and Undo restores their rows.
 - Jobs now provides **View recovered passwords**, which opens that session's hash/password table and reveals the results on request. Completed recoveries show a clear message, and selecting a session on Results loads it automatically.
 - Inactive sessions can be deleted from history, with Undo until the application closes. Recovery files are retained; running and paused sessions cannot be deleted.
-- Original, embedded Quick (64), Normal (512), Heavy (4,096), and Super (16,384) Dictionary rule presets, with deterministic regeneration and versioned profile identifiers.
-- An original 848-word starter list, automatic selection for new configurations, and direct access to an optional local full wordlist.
+- Original, embedded Quick (64), Normal (512), Heavy (4,096), and Super (16,384) Dictionary rule presets, with deterministic regeneration and versioned preset identifiers.
+- An original 848-word starter list and automatic selection for new configurations.
 - Clickable rule help with Hashcat syntax and before/after examples.
 - Tests for preset generation, command selection, validation, asset repair, starter-list discovery, and Basic/Expert workflows; optional real Hashcat rule-output validation.
 

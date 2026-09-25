@@ -17,11 +17,12 @@ HashLynx is an independent GUI frontend. Hashcat is a separate third-party proje
 - Mask/custom charset validation, increment settings, workload/device/temperature controls, named sessions, potfile/output options, and a constrained Expert argument extension field.
 - Built-in **Common patterns (1,000)** for Mask attacks, alongside custom masks and files. Sources, corpus limits, and regeneration are documented in [built-in masks](docs/built-in-masks.md).
 - Automatic validation when starting recovery, with run options, a copyable command preview, and a separate Preflight button in Expert mode. Commands execute with `ProcessStartInfo.ArgumentList`, never through a shell.
+- A live **Ready to recover** checklist for the target, attack inputs and device setup, with direct links to the relevant controls and colors that distinguish ready, missing and pending items.
 - Asynchronous jobs, parsed JSON status metrics, stop, job history, interrupted-job detection, and restore when a saved Hashcat restore file exists.
 - Session-specific recovered results, an all-sessions view, plaintext hide/reveal, copy, and export. Completion banners link to results; optional Windows notifications keep passwords hidden. Hardware discovery includes a bounded known-answer recovery test per device.
 - An extensible extractor registry for PDF, ZIP, RAR, 7-Zip, BitLocker, Microsoft Office, and KeePass. All seven formats are built in and need no extractor configuration.
 - Wordlist library names, cached background line counts, missing-file repair, and cancellable combine/deduplicate/byte-length filtering into new files.
-- Attack profile save/load/delete, per-user JSON persistence with atomic writes, sanitized structured diagnostics, and a Windows build/test workflow.
+- Per-user JSON persistence with atomic writes, sanitized structured diagnostics, and a Windows build/test workflow.
 
 ## Target Inspector
 
@@ -84,7 +85,7 @@ Or run `./scripts/build.ps1 -Publish`. Copy the publish directory as a unit. Obt
 
 ## Recovery workflow
 
-Launch `artifacts/publish/win-x64/HashLynx.exe`. The app uses `%LOCALAPPDATA%\HashLynx` and resumes your normal settings, wordlist library, profiles and session history. Earlier recovery-workflow test data remains under `%LOCALAPPDATA%\HashLynx\Experiments\RecoveryWorkflows`; its histories, queues and results are preserved separately and are not imported automatically.
+Launch `artifacts/publish/win-x64/HashLynx.exe`. The app uses `%LOCALAPPDATA%\HashLynx` and resumes your normal settings, wordlist library and session history. Earlier recovery-workflow test data remains under `%LOCALAPPDATA%\HashLynx\Experiments\RecoveryWorkflows`; its histories, queues and results are preserved separately and are not imported automatically.
 
 Enable **Expert mode** on Attack to use **What do you remember?** for words or a fixed beginning/ending with a total length range. Preview examples and candidate counts, then add the attempts to Queue. The Expert-only **Run several attempts** section also offers **Add current attack to queue** / **Queue No Rules, Quick, Normal** beneath Start recovery. Start the queue explicitly; it runs one step at a time, stops a sequence when its target is fully recovered, and pauses on failure or restart. The Queue page remains available in Basic mode. See [queue behavior and testing](docs/recovery-workflows.md).
 
@@ -95,13 +96,17 @@ Enable **Expert mode** on Attack to use **What do you remember?** for words or a
 
 Selecting a session directly on **Results** loads its results automatically, with passwords initially hidden. Use **Show passwords** to reveal or hide them; **Refresh results** checks for additional recoveries from an ongoing job.
 
+The **Ready to recover** checklist updates as you edit the attack. Green text indicates readiness, red indicates missing inputs or required corrections, and amber indicates pending analysis or device checks. **Review target**, **Choose inputs** and **Check hardware** take you to the relevant controls; **Refresh checks** rechecks files changed outside the app. The checklist distinguishes available inputs from a verified device: automatic device verification still runs before recovery, and Start performs the final validation.
+
+Jobs and completion banners use plain-language outcomes such as **Finished — no new match**, **Some recovered** and **Needs attention**. Contextual buttons lead to Hardware, Settings or the attack inputs; recorded backend diagnostics remain under **Technical details**. Recovery claims are based on the session's own output. A backend reporting previously cached matches offers **Check earlier results** without assigning those passwords to the current session. See [readiness and outcomes](docs/usability-guidance.md).
+
 Each session shows only passwords written to its own output file. Hashcat's shared potfile is a cache of previously known passwords, so its matches are not assigned to later sessions. If a session has no output, it shows no recovered rows; results can still be read without the original target or an installed backend. Missing output files cannot be reconstructed with reliable session ownership from the shared cache.
 
 Check **Show All Sessions Results** to combine results from all sessions currently in history. The **Session** column identifies each row's source; CSV exports include the session name and ID. Uncheck it to return to the selected session. New attacks require a separate, unused output file; restore continues using the original session's file. Ambiguous legacy output files shared by multiple sessions are excluded with a message instead of assigning their passwords to both sessions.
 
 To clean up history, select an inactive session on **Jobs** and click **Delete session**. **Undo delete** restores removed entries while HashLynx remains open. Deletion removes the history entry only: target, output, checkpoint, and potfile data remain on disk. Running and paused sessions cannot be deleted.
 
-Basic mode manages devices, session names, result paths, and other run settings. Enable **Expert mode** to use password hints and queue-building controls, select custom rule files, adjust run options, or use the separate Preflight and command-preview controls. Existing profiles with custom rules or advanced options open Expert mode so their saved behavior remains visible. Mask, Hybrid, and Combinator attacks remain available for users who need them.
+Basic mode manages devices, session names, result paths, and other run settings. Enable **Expert mode** to use password hints and queue-building controls, select custom rule files, adjust run options, or use the separate Preflight and command-preview controls. Mask, Hybrid, and Combinator attacks remain available for users who need them.
 
 With no device preference saved, **checked automatic selection** verifies a small local sample before starting. It tries available GPUs, then CPUs and other devices, and uses the first device that actually recovers the sample. Failed devices are skipped without driver overrides. The successful choice is cached while the app stays open and the reported hardware remains unchanged; refresh Hardware or a failed recovery clears it. A sample check can take up to 90 seconds per device. Jobs shows the check and allows Stop; queue pause and app shutdown cancel pending checks. Explicit Hardware defaults and Expert IDs keep their existing behavior. A passed sample does not guarantee support or speed for every hash type.
 
@@ -123,7 +128,7 @@ Each tier contains the smaller tiers and uses one rule file. These are effort bu
 
 The starter list is an original, small educational list embedded in the app (about 6 KB). A larger list appropriate to the target will often be more useful. **Add wordlists…** accepts multiple local files and remembers their locations. Dropped wordlists are remembered too. On later runs, choose a **Saved wordlist** to use it immediately. Basic mode uses one chosen list; Expert mode appends selections to its ordered attack inputs. Combinator's left/right selectors also offer saved paths. **Remove from attack** only changes the current attack; **Forget saved list** removes its library entry without deleting the source file or changing the current attack. Missing files stay listed and produce a warning when selected; add their new location or reconnect the drive. The library stores references, not copies of wordlist contents. Expand **Manage wordlist library** for names, counts, repair and new-file transformations; see [wordlist tools](docs/wordlist-tools.md).
 
-When `wordlist/HashLynx_Wordlist.txt` exists beside the app or in the development checkout, **Use local full list** selects and remembers it. The supplied combined list is about 506 MiB and 47.4 million lines; it stays local and is not copied into the repository or publish output. The root `rules/` and `wordlist/` source collections are Git-ignored.
+Use **Add wordlists…** to select any larger local list, including one from your own source collection. The root `rules/` and `wordlist/` source collections remain local, unmodified and Git-ignored; their contents are not copied into the repository or publish output.
 
 The application never adds `--force`. Backend warnings and driver incompatibilities must be resolved normally. Expert arguments are restricted to an explicit set of additional options; they cannot replace managed target/mode/session/output settings or enable network features.
 
@@ -170,7 +175,7 @@ The application stores mutable data under `%LOCALAPPDATA%\HashLynx\`:
 | Location | Contents |
 | --- | --- |
 | `settings.json` | Paths and UI/default preferences |
-| `profiles.json` | Saved attack configuration, without target contents or recovered results |
+| `profiles.json` | Earlier saved attack configurations, retained for compatibility; profile controls are no longer shown |
 | `wordlists.json` | Saved wordlist file locations; no wordlist contents |
 | `queue.json`, `queue/` | Saved sequences, target snapshots and per-sequence potfiles |
 | `hints/` | Locally generated candidate files from remembered words |
@@ -217,9 +222,9 @@ The same extraction → identification → CPU recovery → session password che
 
 Native BitLocker output also matched Hashcat's reference script, and identification, CPU recovery and session result reading passed using synthetic partition metadata around the public mode-22100 self-test vector. Direct Windows-volume extraction and mode identification passed on the user-selected BitLocker test device; the user subsequently confirmed the module worked successfully.
 
-Run `dotnet run --project tests/HashLynx.UI.Smoke -c Release -- artifacts/ui-smoke` for isolated missing-backend startup, all page/template loading, attack/input/theme layouts, Basic/Expert control visibility, bundled content, legacy/custom profiles, populated manual-catalog expansion/selection/scrolling, and WPF binding checks. With `HASHLYNX_TEST_HASHCAT` set, it also checks catalog search, automatic validation, and preset command generation. Screenshots and the pass/fail report stay under the ignored artifacts directory. CI also runs this harness.
+Run `dotnet run --project tests/HashLynx.UI.Smoke -c Release -- artifacts/ui-smoke` for isolated missing-backend startup, all page/template loading, attack/input/theme layouts, Basic/Expert control visibility, bundled content, populated manual-catalog expansion/selection/scrolling, and WPF binding checks. With `HASHLYNX_TEST_HASHCAT` set, it also checks catalog search, automatic validation, and preset command generation. Screenshots and the pass/fail report stay under the ignored artifacts directory. CI also runs this harness.
 
-To additionally exercise a real, bounded NTLM recovery with the starter list and Normal preset, set `HASHLYNX_TEST_DEVICE` to a current device ID before running the connected WPF smoke test. The check saves that device through Hardware, then runs Start → Jobs → Results in Basic mode without loading a profile. This opt-in check uses a public known-answer fixture and isolated application data; it requires a working compute runtime.
+To additionally exercise a real, bounded NTLM recovery with the starter list and Normal preset, set `HASHLYNX_TEST_DEVICE` to a current device ID before running the connected WPF smoke test. The check saves that device through Hardware, then runs Start → Jobs → Results in Basic mode. This opt-in check uses a public known-answer fixture and isolated application data; it requires a working compute runtime.
 
 Status, ETA, temperatures, and device utilization are shown only when supplied by Hashcat. Candidate strings are deliberately omitted from persisted monitoring data to reduce secret duplication. Large result sets currently load into memory when refreshed; very large recovery outputs may need a future paged results viewer. File structural analysis is bounded and best-effort. The first release does not include installers, automatic updates, automatic dependency downloads, or new attack families beyond those listed above.
 

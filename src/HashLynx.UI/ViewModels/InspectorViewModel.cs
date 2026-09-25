@@ -70,7 +70,7 @@ public sealed class InspectorViewModel : ObservableObject
         SelectedDrive = Drives.FirstOrDefault(drive => drive.VolumeId == previous);
         DriveStatus = Drives.Count == 0 ? "No local drives are available. Connect the device and refresh." : "Select the correct volume by letter, label and size. BitLocker password support is checked when extracting.";
     }
-    private void Invalidate() { _targetCancellation.Cancel(); _targetCancellation.Dispose(); _targetCancellation = CancellationTokenSource.CreateLinkedTokenSource(_services.LifetimeToken); _revision++; PreparedTargetPath = null; ExtractionNotice = ""; _extractionSuggestedModes = []; Matches.Clear(); SelectedMode = null; Summary = "Target changed. Analyze it or choose a hash mode explicitly."; Problems = ""; }
+    private void Invalidate() { _targetCancellation.Cancel(); _targetCancellation.Dispose(); _targetCancellation = CancellationTokenSource.CreateLinkedTokenSource(_services.LifetimeToken); _revision++; PreparedTargetPath = null; ExtractionNotice = ""; _extractionSuggestedModes = []; Matches.Clear(); SelectedMode = null; ValidationMessage = ""; Summary = "Target changed. Analyze it or choose a hash mode explicitly."; Problems = ""; Raise(nameof(PreparedTargetPath)); Raise(nameof(TargetRevision)); }
     private void VerifyRevision(long revision) { if (revision != _revision) throw new InvalidOperationException("The target changed while analysis was running. Analyze the current target again."); }
     public async Task LoadCatalogAsync()
     {
@@ -84,11 +84,13 @@ public sealed class InspectorViewModel : ObservableObject
         Modes.Clear();
         foreach (var mode in _catalog.Where(mode => string.IsNullOrWhiteSpace(Search) || mode.DisplayName.Contains(Search, StringComparison.OrdinalIgnoreCase) || mode.Category.Contains(Search, StringComparison.OrdinalIgnoreCase))) Modes.Add(mode);
     }
-    public async Task<string> PrepareTargetAsync()
+    public async Task<string> PrepareTargetAsync(CancellationToken externalCancellation = default)
     {
         if (PreparedTargetPath is not null) return PreparedTargetPath;
         var revision = _revision;
-        var cancellationToken = _targetCancellation.Token;
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_targetCancellation.Token, externalCancellation);
+        var cancellationToken = cancellation.Token;
+        cancellationToken.ThrowIfCancellationRequested();
         var target = TargetPath;
         string? prepared = null;
         if (InputMode == 0)
@@ -148,15 +150,17 @@ public sealed class InspectorViewModel : ObservableObject
         }
         VerifyRevision(revision);
         PreparedTargetPath = prepared;
+        Raise(nameof(PreparedTargetPath));
         return PreparedTargetPath;
     }
-    public async Task AnalyzeAsync()
+    public async Task AnalyzeAsync(CancellationToken externalCancellation = default)
     {
         var installation = _services.RequireBackend();
         var revision = _revision;
-        var cancellationToken = _targetCancellation.Token;
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_targetCancellation.Token, externalCancellation);
+        var cancellationToken = cancellation.Token;
         Summary = InputMode == 2 ? "Checking extractors and reading encrypted file metadata…" : "Analyzing with Hashcat…";
-        var path = await PrepareTargetAsync();
+        var path = await PrepareTargetAsync(cancellationToken);
         var analysis = await new HashFileAnalyzer().AnalyzeAsync(path, cancellationToken);
         var matches = await _services.Backend.IdentifyAsync(installation, path, cancellationToken);
         VerifyRevision(revision);

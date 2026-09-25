@@ -11,7 +11,7 @@
         <Border x:Name="CompletionBanner" DockPanel.Dock="Top" Style="{StaticResource Card}" Margin="30,16,30,0" Visibility="{Binding CompletionVisible, Converter={StaticResource BoolVisibility}}"><StackPanel>
           <DockPanel><Button Content="Dismiss" DockPanel.Dock="Right" Command="{Binding DismissCompletionCommand}"/><TextBlock Text="{Binding CompletionTitle}" Style="{StaticResource SectionTitle}"/></DockPanel>
           <TextBlock Text="{Binding CompletionDetail}" TextWrapping="Wrap" Margin="0,0,0,10"/>
-          <WrapPanel><Button Content="View recovered passwords" Command="{Binding OpenCompletionCommand}" Style="{StaticResource PrimaryButton}" Visibility="{Binding CompletionHasResults, Converter={StaticResource BoolVisibility}}"/><Button Content="View session" Command="{Binding OpenCompletionSessionCommand}"/><Button Content="Choose another attempt" Command="{Binding TryAnotherAttemptCommand}"/></WrapPanel>
+          <WrapPanel><Button Content="View recovered passwords" Command="{Binding OpenCompletionCommand}" Style="{StaticResource PrimaryButton}" Visibility="{Binding CompletionHasResults, Converter={StaticResource BoolVisibility}}"/><Button Content="View session" Command="{Binding OpenCompletionSessionCommand}"/><Button x:Name="CompletionNextActionButton" Content="{Binding CompletionActionLabel}" Command="{Binding CompletionNextActionCommand}" Visibility="{Binding CompletionHasAction, Converter={StaticResource BoolVisibility}}"/></WrapPanel>
         </StackPanel></Border>
         <ContentControl Content="{Binding CurrentPage}"/>
       </DockPanel>

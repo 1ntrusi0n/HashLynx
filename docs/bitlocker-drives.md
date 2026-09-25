@@ -11,7 +11,7 @@ Direct BitLocker volume extraction is included in the main application following
 
 For a controlled end-to-end check, create a temporary local wordlist containing the known test-device password, choose **No Rules**, and run recovery. There is no need to share the password with the developer. Extraction and mode identification alone do not verify the password.
 
-The app uses its normal histories, settings, targets and profiles under `%LOCALAPPDATA%\HashLynx`. Data from the earlier experimental build remains untouched under `%LOCALAPPDATA%\HashLynx\Experiments\BitLockerDrive`; it is not automatically imported into the normal history. Keep the whole application folder together, including `DriveReader/`.
+The app uses its normal histories, settings and targets under `%LOCALAPPDATA%\HashLynx`. Data from the earlier experimental build remains untouched under `%LOCALAPPDATA%\HashLynx\Experiments\BitLockerDrive`; it is not automatically imported into the normal history. Keep the whole application folder together, including `DriveReader/`.
 
 ## Scope and limits
 

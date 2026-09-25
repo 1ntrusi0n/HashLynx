@@ -16,7 +16,14 @@ public sealed class RecoveryQueueRow(RecoveryPlan plan, RecoveryStep step, int n
     public string Sequence => Plan.Name;
     public int Number => number;
     public string Name => Step.Name;
-    public string State => Step.State.ToString();
+    public string State => Step.State switch
+    {
+        RecoveryStepState.Pending => "Waiting",
+        RecoveryStepState.Completed => "Finished",
+        RecoveryStepState.Failed => "Needs attention",
+        RecoveryStepState.Interrupted => "Stopped early",
+        _ => Step.State.ToString()
+    };
     public string Message => Step.Message;
     public void Refresh() => Raise("");
 }

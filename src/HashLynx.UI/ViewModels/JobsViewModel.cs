@@ -12,11 +12,20 @@ namespace HashLynx.UI.ViewModels;
 public sealed class JobViewModel(JobRecord record) : ObservableObject
 {
     private bool _isPreparing;
-    public bool IsPreparing { get => _isPreparing; set { if (Set(ref _isPreparing, value)) Raise(nameof(State)); } }
+    private bool? _sessionResultsAvailable;
+    public bool? SessionResultsAvailable { get => _sessionResultsAvailable; set { if (Set(ref _sessionResultsAvailable, value)) Refresh(); } }
+    public bool IsPreparing { get => _isPreparing; set { if (Set(ref _isPreparing, value)) Refresh(); } }
     public override string ToString() => Name;
     public JobRecord Record { get; } = record;
     public string Name => Record.Name;
-    public string State => IsPreparing ? "Checking hardware" : Record.LatestStatus?.State is { } status && Record.State is JobState.Running or JobState.Paused ? status : Record.State.ToString();
+    public string State => IsPreparing ? "Checking hardware" : Outcome.StateLabel;
+    public JobOutcome Outcome => IsPreparing
+        ? new("Checking hardware", "Checking the recovery device", "Running a small local sample before using this device for recovery. Stop cancels this check.", false, JobNextAction.None)
+        : JobOutcome.For(Record.State, SessionResultsAvailable, CanRestore, HashcatFailureGuidance.For(Record.Diagnostic));
+    public string OutcomeTitle => Outcome.Title;
+    public string OutcomeDetail => Outcome.Detail;
+    public string NextActionLabel => Outcome.ActionLabel;
+    public bool HasNextAction => Outcome.Action != JobNextAction.None;
     public string ComputeDevice => Record.Configuration.Options.Devices.Count == 0 ? "Automatic device check before recovery" : "Recovery device: " + string.Join(", ", Record.Configuration.Options.Devices);
     public string ProgressNote => Record.Configuration.Attack.MaskPresetId is not null || !string.IsNullOrWhiteSpace(Record.Configuration.Attack.MaskFile)
         ? "Progress and estimated completion refer to the current mask, not the entire mask list." : "";
@@ -32,8 +41,8 @@ public sealed class JobViewModel(JobRecord record) : ObservableObject
     public string Output => Record.Configuration.Options.OutputPath ?? "";
     public string Created => Record.CreatedAt.LocalDateTime.ToString("g");
     public IReadOnlyList<DeviceStatus> Devices => Record.LatestStatus?.Devices ?? [];
-    public bool HasRecovered => Record.State == JobState.Cracked || Record.LatestStatus?.RecoveredHashes > 0;
-    public string RecoveryMessage => HasRecovered ? "Passwords recovered. Open the results to see each hash and its password." : "Open results to check for passwords recovered during this session.";
+    public bool HasRecovered => SessionResultsAvailable == true;
+    public string RecoveryMessage => HasRecovered ? "Passwords saved by this session are available in its results." : "Results only include passwords saved by this session. Earlier recoveries stay with their original sessions.";
     public bool CanRestore => Record.State is not (JobState.Running or JobState.Paused) && File.Exists(Record.RestorePath ?? Record.Configuration.Options.RestorePath);
     public void Refresh() => Raise("");
 }
@@ -63,6 +72,8 @@ public sealed class JobsViewModel : ObservableObject
     public ICommand ViewResultsCommand { get; }
     public ICommand DeleteCommand { get; }
     public ICommand UndoDeleteCommand { get; }
+    public ICommand NextActionCommand { get; }
+    public event Action<JobNextAction>? NextActionRequested;
     public event Func<JobViewModel, Task>? ResultsRequested;
     public event Action<JobViewModel>? JobFinished;
     public Func<Task>? BeforeStop { get; set; }
@@ -88,6 +99,12 @@ public sealed class JobsViewModel : ObservableObject
             }
         }, services.ReportError, _ => Selected is not null && (_running.ContainsKey(Selected.Record.Id) || _preparing.ContainsKey(Selected.Record.Id)));
         RestoreCommand = new AsyncCommand(async _ => { if (Selected is { CanRestore: true } job) await LaunchAsync(job, true); }, services.ReportError, _ => Selected?.CanRestore == true && !services.IsComputeBusy && !services.IsQueueActive);
+        NextActionCommand = new RelayCommand(_ =>
+        {
+            if (Selected is not { } job) return;
+            if (job.Outcome.Action == JobNextAction.Restore) { if (RestoreCommand.CanExecute(null)) RestoreCommand.Execute(null); }
+            else NextActionRequested?.Invoke(job.Outcome.Action);
+        }, _ => Selected is { HasNextAction: true } job && (job.Outcome.Action != JobNextAction.Restore || RestoreCommand.CanExecute(null)));
         _clock = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => Tick(), Dispatcher.CurrentDispatcher);
         _clock.Start();
     }
@@ -129,9 +146,20 @@ public sealed class JobsViewModel : ObservableObject
         foreach (var record in (await _services.Store.LoadJobsAsync()).OrderByDescending(record => record.CreatedAt))
         {
             if (record.State is JobState.Running or JobState.Paused) { record.State = JobState.Interrupted; record.Diagnostic = "HashLynx closed while this job was active. Restore is available when Hashcat saved a restore file."; }
-            Jobs.Add(new JobViewModel(record));
+            var job = new JobViewModel(record);
+            Jobs.Add(job);
         }
+        foreach (var job in Jobs) await RefreshSessionResultsAsync(job);
         Selected = Jobs.FirstOrDefault();
+    }
+    private async Task RefreshSessionResultsAsync(JobViewModel job)
+    {
+        var output = _services.Backend.Commands.GetOutputPath(job.Record.Configuration);
+        if (Jobs.Any(other => other != job && string.Equals(_services.Backend.Commands.GetOutputPath(other.Record.Configuration), output, StringComparison.OrdinalIgnoreCase)))
+        { job.SessionResultsAvailable = null; return; }
+        try { job.SessionResultsAvailable = await _services.Backend.HasSessionResultsAsync(job.Record.Configuration, _services.LifetimeToken); }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or OperationCanceledException)
+        { job.SessionResultsAvailable = null; }
     }
     public async Task StartAsync(HashcatJob configuration, bool queued = false)
     {
@@ -161,6 +189,7 @@ public sealed class JobsViewModel : ObservableObject
     private async Task LaunchCoreAsync(JobViewModel job, bool restore, bool queued)
     {
         var backend = _services.RequireBackend();
+        job.SessionResultsAvailable = null;
         if (!_services.TryBeginComputeOperation()) throw new InvalidOperationException("Another recovery or hardware test is running.");
         using var preparation = CancellationTokenSource.CreateLinkedTokenSource(_services.LifetimeToken);
         _preparing[job.Record.Id] = (preparation, queued);
@@ -204,9 +233,11 @@ public sealed class JobsViewModel : ObservableObject
             _services.EndComputeOperation();
             job.Record.State = exception is OperationCanceledException ? JobState.Cancelled : JobState.Failed;
             job.Record.Diagnostic = exception is OperationCanceledException ? "Stopped before recovery started. No recovery attack was launched."
-                : selectionFailure ?? "Hashcat could not start. Validate the backend and review the preflight inputs.";
+                : selectionFailure ?? HashcatFailureGuidance.For(exception.Message).Detail;
             job.Record.FinishedAt = DateTimeOffset.UtcNow; job.Refresh();
-            await SaveAsync(); throw;
+            await RefreshSessionResultsAsync(job); await SaveAsync();
+            JobFinished?.Invoke(job);
+            throw;
         }
         finally
         {
@@ -237,6 +268,7 @@ public sealed class JobsViewModel : ObservableObject
         finally
         {
             _running.Remove(job.Record.Id); job.Record.FinishedAt = DateTimeOffset.UtcNow; job.Refresh(); Raise(nameof(HasRunning)); CommandManager.InvalidateRequerySuggested();
+            await RefreshSessionResultsAsync(job);
             if (job.HasRecovered) _services.Notice = "Passwords recovered. On Jobs, select the session and choose View recovered passwords.";
             Exception? persistenceError = null;
             try

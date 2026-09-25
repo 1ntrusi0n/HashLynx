@@ -40,17 +40,4 @@ public sealed class BundledWordlists(AppPaths paths)
         }
     }
 
-    /// <summary>Discover an optional user-provided full list in the development tree or beside the published app.</summary>
-    public string? FindLocalWordlist(string? applicationDirectory = null)
-    {
-        var current = new DirectoryInfo(applicationDirectory ?? AppContext.BaseDirectory);
-        for (var directory = current; directory is not null; directory = directory.Parent)
-        {
-            if (!File.Exists(Path.Combine(directory.FullName, "HashLynx.sln")) && !Directory.Exists(Path.Combine(directory.FullName, ".git"))) continue;
-            var development = Path.Combine(directory.FullName, "wordlist", "HashLynx_Wordlist.txt");
-            if (File.Exists(development)) return development;
-        }
-        var installed = Path.Combine(current.FullName, "wordlist", "HashLynx_Wordlist.txt");
-        return File.Exists(installed) ? installed : null;
-    }
 }

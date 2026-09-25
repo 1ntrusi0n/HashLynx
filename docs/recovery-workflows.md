@@ -1,6 +1,6 @@
 # Recovery workflows
 
-Recovery workflows are part of the normal application on `main`. Launch `artifacts/publish/win-x64/HashLynx.exe`; it uses `%LOCALAPPDATA%\HashLynx` and resumes the normal settings, library, profiles and session history. Earlier recovery-workflow test data under `%LOCALAPPDATA%\HashLynx\Experiments\RecoveryWorkflows` is preserved separately, including its queues and results, without automatic import. Older BitLocker-experiment data is also preserved.
+Recovery workflows are part of the normal application on `main`. Launch `artifacts/publish/win-x64/HashLynx.exe`; it uses `%LOCALAPPDATA%\HashLynx` and resumes the normal settings, library and session history. Earlier recovery-workflow test data under `%LOCALAPPDATA%\HashLynx\Experiments\RecoveryWorkflows` is preserved separately, including its queues and results, without automatic import. Older BitLocker-experiment data is also preserved.
 
 ## Password hints
 

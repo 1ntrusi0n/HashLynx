@@ -45,36 +45,6 @@ public sealed class BundledWordlistsTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(root, "wordlists")));
     }
 
-    [Fact]
-    public void DiscoveryUsesDevelopmentTreeWithoutReadingOrCopyingFullList()
-    {
-        var lists = new BundledWordlists(new AppPaths(Path.Combine(root, "data")));
-        var app = Path.Combine(root, "repo", "src", "bin");
-        Directory.CreateDirectory(app);
-        var repo = Path.Combine(root, "repo");
-        File.WriteAllText(Path.Combine(repo, "HashLynx.sln"), "marker");
-        var local = Path.Combine(repo, "wordlist", "HashLynx_Wordlist.txt");
-        Directory.CreateDirectory(Path.GetDirectoryName(local)!);
-        File.WriteAllText(local, "synthetic-local-list\n");
-        var content = File.ReadAllText(local);
-        Assert.Equal(local, lists.FindLocalWordlist(app));
-        Assert.Equal(content, File.ReadAllText(local));
-        Assert.False(Directory.Exists(Path.Combine(root, "data", "wordlists")));
-    }
-
-    [Fact]
-    public void PublishedApplicationFindsAdjacentOptionalListAndHandlesAbsence()
-    {
-        var lists = new BundledWordlists(new AppPaths(root));
-        var app = Path.Combine(root, "published");
-        Directory.CreateDirectory(app);
-        Assert.Null(lists.FindLocalWordlist(app));
-        var local = Path.Combine(app, "wordlist", "HashLynx_Wordlist.txt");
-        Directory.CreateDirectory(Path.GetDirectoryName(local)!);
-        File.WriteAllText(local, "synthetic\n");
-        Assert.Equal(local, lists.FindLocalWordlist(app));
-    }
-
     public void Dispose()
     {
         if (Directory.Exists(root)) Directory.Delete(root, true);

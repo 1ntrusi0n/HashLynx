@@ -75,8 +75,8 @@ public static class RecoveryQueueTransitions
         step.Message = state switch
         {
             JobState.Cracked => "All targets are recovered. View results in the sequence's sessions.",
-            JobState.Exhausted => "This attempt finished; its candidates have been tried.",
-            JobState.Failed => "The attempt failed. Review its session diagnostic before retrying.",
+            JobState.Exhausted => "Finished checking the guesses in this attempt. View its session for any passwords saved before choosing the next step.",
+            JobState.Failed => "The attempt could not finish. View its session for the problem and suggested next action before retrying.",
             _ => "Stopped before finishing. Restore the session or retry this step."
         };
         if (state == JobState.Cracked)

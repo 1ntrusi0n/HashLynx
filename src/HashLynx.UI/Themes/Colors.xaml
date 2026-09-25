@@ -10,4 +10,6 @@
   <SolidColorBrush x:Key="AccentBrush" Color="#3AD8CB" />
   <SolidColorBrush x:Key="AccentTextBrush" Color="#042321" />
   <SolidColorBrush x:Key="WarningBrush" Color="#F0C875" />
+  <SolidColorBrush x:Key="SuccessBrush" Color="#70DBA1" />
+  <SolidColorBrush x:Key="ErrorBrush" Color="#FF9191" />
 </ResourceDictionary>

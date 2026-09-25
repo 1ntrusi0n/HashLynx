@@ -1,4 +1,3 @@
-using HashLynx.Core;
 using HashLynx.Hashcat;
 
 namespace HashLynx.UI.ViewModels;
@@ -48,21 +47,5 @@ public sealed partial class AttackViewModel
     {
         Raise(nameof(MaskSources)); Raise(nameof(SelectedMaskSource));
         Raise(nameof(IsBuiltInMask)); Raise(nameof(ShowMaskText)); Raise(nameof(ShowMaskFile)); Raise(nameof(UsesCustomMaskOptions));
-    }
-
-    private void ValidateMaskProfile(AttackConfiguration attack)
-    {
-        if (attack.MaskPresetId is null) return;
-        _maskPresets.GetById(attack.MaskPresetId);
-        if (attack.Kind != AttackFamilies.Mask || !string.IsNullOrWhiteSpace(attack.Mask) || !string.IsNullOrWhiteSpace(attack.MaskFile)
-            || attack.CustomCharsets.Count > 0 || attack.Increment)
-            throw new InvalidOperationException("This profile mixes a built-in mask list with another mask source or options. Its saved data has been preserved. Use one mask source in a Mask attack.");
-    }
-
-    private void LoadMaskProfile(AttackConfiguration attack)
-    {
-        if (!UsesMask) return;
-        SelectedMaskSource = attack.MaskPresetId is not null ? MaskSourceChoice.BuiltIn
-            : !string.IsNullOrWhiteSpace(attack.MaskFile) ? MaskSourceChoice.File : MaskSourceChoice.Text;
     }
 }

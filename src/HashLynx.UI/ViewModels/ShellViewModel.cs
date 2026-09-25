@@ -23,10 +23,13 @@ public sealed class ShellViewModel : ObservableObject
     public string CompletionTitle => _completion?.Title ?? "";
     public string CompletionDetail => _completion?.Detail ?? "";
     public bool CompletionHasResults => _completion?.OfferResults == true;
+    public string CompletionActionLabel => _completionJob?.NextActionLabel ?? "";
+    public bool CompletionHasAction => _completionJob?.HasNextAction == true;
     public ICommand DismissCompletionCommand { get; }
     public ICommand OpenCompletionCommand { get; }
     public ICommand OpenCompletionSessionCommand { get; }
     public ICommand TryAnotherAttemptCommand { get; }
+    public ICommand CompletionNextActionCommand { get; }
     public SettingsViewModel Settings { get; }
     public ExtractorsViewModel Extractors { get; }
     public ObservableCollection<NavigationItem> Navigation { get; }
@@ -41,6 +44,23 @@ public sealed class ShellViewModel : ObservableObject
         Navigation = [new("Attack", "\uE945", Attack), new("Jobs", "\uE9D9", Jobs), new("Results", "\uE8D7", new ResultsViewModel(services, Jobs)), new("Hardware", "\uE7F4", new HardwareViewModel(services)), new("Settings / About", "\uE713", Settings)];
         Navigation.Insert(1, new("Queue", "\uE8FD", Queue));
         Attack.ConnectQueue(Queue, () => Selected = Navigation.First(item => item.Page == Queue));
+        Attack.NavigationRequested += destination =>
+        {
+            if (destination == "Hardware") ShowHardware();
+            else if (destination == "Settings") ShowSettings();
+        };
+        Jobs.NextActionRequested += action =>
+        {
+            if (action == JobNextAction.CheckHardware) ShowHardware();
+            else if (action == JobNextAction.CheckSettings) ShowSettings();
+            else if (action == JobNextAction.CheckEarlierResults)
+            {
+                var page = Navigation.Single(item => item.Page is ResultsViewModel);
+                ((ResultsViewModel)page.Page).ShowAllSessions = true;
+                Selected = page;
+            }
+            else if (action is JobNextAction.ChooseAttempt or JobNextAction.ReviewInputs) Selected = Navigation.First(item => item.Page == Attack);
+        };
         Queue.SessionRequested += () => Selected = Navigation.First(item => item.Page == Jobs);
         Jobs.BeforeStop = Queue.PauseBeforeStopAsync;
         Jobs.JobFinished += ShowCompletion;
@@ -53,6 +73,12 @@ public sealed class ShellViewModel : ObservableObject
             await ((ResultsViewModel)page.Page).OpenAsync(_completionJob, reveal: true);
         }, services.ReportError);
         TryAnotherAttemptCommand = new RelayCommand(_ => Selected = Navigation.First(item => item.Page == Attack));
+        CompletionNextActionCommand = new RelayCommand(_ =>
+        {
+            if (_completionJob is null) return;
+            Jobs.Selected = _completionJob;
+            if (Jobs.NextActionCommand.CanExecute(null)) Jobs.NextActionCommand.Execute(null);
+        }, _ => _completionJob?.HasNextAction == true && (_completionJob.Outcome.Action != JobNextAction.Restore || (!Services.IsComputeBusy && !Services.IsQueueActive)));
         if (services.Extractors.All.Any(extractor => !extractor.IsBuiltIn))
             Navigation.Insert(Navigation.Count - 1, new("Extractors", "\uE8B7", Extractors));
         Jobs.ResultsRequested += async job =>
@@ -77,12 +103,13 @@ public sealed class ShellViewModel : ObservableObject
         catch (Exception exception) { Services.ReportError(exception); }
     }
     public void ShowSettings() => Selected = Navigation.First(item => item.Page == Settings);
+    public void ShowHardware() => Selected = Navigation.First(item => item.Page is HardwareViewModel);
     public void ShowCompletion(JobViewModel job)
     {
-        _completionJob = job; _completion = CompletionFeedback.For(job.Record.State, job.HasRecovered); RaiseCompletion();
+        _completionJob = job; _completion = CompletionFeedback.From(job.Outcome); RaiseCompletion();
         if (Services.Settings.CompletionNotifications) _notifications.Show(_completion.OfferResults, () => { Jobs.Selected = job; Selected = Navigation.First(item => item.Page == Jobs); });
     }
-    private void RaiseCompletion() { Raise(nameof(CompletionVisible)); Raise(nameof(CompletionTitle)); Raise(nameof(CompletionDetail)); Raise(nameof(CompletionHasResults)); }
+    private void RaiseCompletion() { Raise(nameof(CompletionVisible)); Raise(nameof(CompletionTitle)); Raise(nameof(CompletionDetail)); Raise(nameof(CompletionHasResults)); Raise(nameof(CompletionActionLabel)); Raise(nameof(CompletionHasAction)); }
     public async Task<bool> RequestCloseAsync()
     {
         if (Jobs.HasRunning && !Services.Dialogs.Confirm("There are running recovery jobs. Close HashLynx and stop them? To preserve a checkpoint first, choose No and use Checkpoint in Jobs.", "Close HashLynx")) return false;

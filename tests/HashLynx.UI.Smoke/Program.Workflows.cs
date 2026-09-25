@@ -45,11 +45,31 @@ internal sealed partial class SmokeApplication
         await RenderAsync(window, "Wordlist-library-tools");
         Find<Expander>(window, "WordlistManagerExpander").IsExpanded = false;
 
-        shell.ShowCompletion(new(new JobRecord { State = JobState.Exhausted, LatestStatus = new() { RecoveredHashes = 1, TotalHashes = 2 } }));
+        shell.ShowCompletion(new(new JobRecord { State = JobState.Exhausted, LatestStatus = new() { RecoveredHashes = 1, TotalHashes = 2 } }) { SessionResultsAvailable = true });
         Require(shell.CompletionVisible && shell.CompletionHasResults, "Partial recoveries need a visible results action.");
         await RenderAsync(window, "Completion-partial-results");
         shell.DismissCompletionCommand.Execute(null);
         Require(!shell.CompletionVisible, "Completion banners must dismiss.");
+        var previousSelectedJob = shell.Jobs.Selected;
+        var failed = new JobViewModel(new JobRecord { State = JobState.Failed, Diagnostic = "OpenCL could not query device information (CL_INVALID_VALUE)." });
+        shell.Jobs.Jobs.Add(failed);
+        shell.Jobs.Selected = failed;
+        shell.ShowCompletion(failed);
+        Require(shell.CompletionActionLabel == "Check hardware", "Device failures need a hardware remedy.");
+        shell.CompletionNextActionCommand.Execute(null);
+        Require(shell.CurrentPage is HardwareViewModel, "The hardware remedy must navigate without starting recovery.");
+        shell.Selected = shell.Navigation.First(item => item.Page == shell.Jobs);
+        await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+        Require(!Find<Expander>(window, "JobTechnicalDetails").IsExpanded, "Technical diagnostics must start collapsed.");
+        Require(Find<TextBlock>(window, "JobOutcomeDetail").Text.Contains("recovery device"), "The Jobs page must explain the problem in plain language.");
+        await RenderAsync(window, "Job-actionable-failure");
+        shell.ShowCompletion(new(new JobRecord { State = JobState.Cracked, LatestStatus = new() { RecoveredHashes = 1, TotalHashes = 1 } }) { SessionResultsAvailable = false });
+        Require(!shell.CompletionHasResults && shell.CompletionDetail.Contains("earlier sessions"), "Cached matches must not be presented as passwords saved by this session.");
+        shell.ShowCompletion(new(new JobRecord { State = JobState.Exhausted }) { SessionResultsAvailable = false });
+        Require(shell.CompletionDetail.Contains("Finished checking") && shell.CompletionHasAction, "No-match attempts need a clear explanation and another-attempt action.");
+        shell.DismissCompletionCommand.Execute(null);
+        shell.Jobs.Jobs.Remove(failed);
+        shell.Jobs.Selected = previousSelectedJob;
 
         var queueStore = new PersistenceStore(new AppPaths(Path.Combine(store.Paths.Root, "queue-tests")));
         var document = new RecoveryQueueDocument { Plans = [new() { Steps = Enumerable.Range(1, 3).Select(i => new RecoveryStep

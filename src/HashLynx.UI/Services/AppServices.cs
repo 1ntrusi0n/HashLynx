@@ -113,9 +113,9 @@ public sealed class AppServices : ObservableObject
         var systemLight = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", 0) is int value && value != 0;
         var light = theme == "Light" || (theme == "System" && systemLight);
         var colors = light
-            ? new[] { "#EDF3F8", "#E3EBF3", "#FFFFFF", "#F4F7FB", "#D7EAEF", "#BDCCD8", "#152C43", "#526A80", "#087D76", "#FFFFFF", "#865800" }
-            : new[] { "#080F1D", "#0B1526", "#101D31", "#0B1526", "#1A3048", "#25384C", "#EAF3F9", "#9AACC1", "#3AD8CB", "#042321", "#F0C875" };
-        var keys = new[] { "BackgroundBrush", "SidebarBrush", "SurfaceBrush", "InputBrush", "HoverBrush", "BorderBrush", "TextBrush", "MutedBrush", "AccentBrush", "AccentTextBrush", "WarningBrush" };
+            ? new[] { "#EDF3F8", "#E3EBF3", "#FFFFFF", "#F4F7FB", "#D7EAEF", "#BDCCD8", "#152C43", "#526A80", "#087D76", "#FFFFFF", "#865800", "#146C43", "#B42318" }
+            : new[] { "#080F1D", "#0B1526", "#101D31", "#0B1526", "#1A3048", "#25384C", "#EAF3F9", "#9AACC1", "#3AD8CB", "#042321", "#F0C875", "#70DBA1", "#FF9191" };
+        var keys = new[] { "BackgroundBrush", "SidebarBrush", "SurfaceBrush", "InputBrush", "HoverBrush", "BorderBrush", "TextBrush", "MutedBrush", "AccentBrush", "AccentTextBrush", "WarningBrush", "SuccessBrush", "ErrorBrush" };
         for (var i = 0; i < keys.Length; i++) Application.Current.Resources[keys[i]] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(colors[i]));
     }
 }

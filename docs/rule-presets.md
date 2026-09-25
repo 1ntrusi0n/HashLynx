@@ -62,6 +62,6 @@ That check loads each preset through Hashcat's `--total-candidates` path and ver
 
 At use time, the app materializes versioned files in its per-user `rule-presets/` directory and restores missing or modified managed files from the embedded originals. The starter is similarly materialized under `wordlists/`. These operations never write to the supplied Hashcat release or original source collections.
 
-Profiles store `RulePresetId`, not a managed absolute rule path. Existing profiles without that field retain their custom `RuleFiles` behavior, including an empty no-rule list. Profiles containing custom rule files open Expert mode; empty no-rule profiles select No Rules without requiring Expert mode. Unknown preset IDs fail with an actionable message instead of silently substituting a different recipe. A saved preset and custom files together are rejected.
+Persisted attack configurations store `RulePresetId`, not a managed absolute rule path. Older configurations without that field retain their custom `RuleFiles` representation, including an empty no-rule list. Unknown preset IDs fail with an actionable message instead of silently substituting a different recipe. A saved preset and custom files together are rejected. Earlier profile files and their schema remain intact for compatibility; the Attack page no longer provides profile controls.
 
 Treat published preset IDs as immutable. If coverage changes, add a new version and retain older embedded assets so saved jobs and profiles can resolve their original recipe.

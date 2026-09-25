@@ -1,6 +1,6 @@
 # Built-in common password structures
 
-Choose **Mask → Built-in common structures (1,000 masks)** to use HashLynx's bundled mask selection without supplying a file. Custom mask text and custom `.hcmask` files remain available. The list applies to complete-password mask attacks; hybrid attacks still use a user-defined mask. Saved profiles and queue steps retain the immutable ID `common-1000-v1`.
+Choose **Mask → Built-in common structures (1,000 masks)** to use HashLynx's bundled mask selection without supplying a file. Custom mask text and custom `.hcmask` files remain available. The list applies to complete-password mask attacks; hybrid attacks still use a user-defined mask. Saved jobs and queue steps retain the immutable ID `common-1000-v1`.
 
 ## Scope and effort
 

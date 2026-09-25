@@ -148,6 +148,45 @@ public sealed class HashcatFacade
         catch (DirectoryNotFoundException) { return []; }
     }
 
+    /// <summary>Check for a complete session result without retaining targets/passwords or loading the whole outfile.</summary>
+    public async Task<bool> HasSessionResultsAsync(HashcatJob job, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await using var stream = new FileStream(Commands.GetOutputPath(job), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
+            using var reader = new StreamReader(stream);
+            var buffer = new char[4096];
+            long position = 0, separator = -1, hexLength = 0;
+            var validHex = true;
+            var carriageReturn = false;
+            int count;
+            while ((count = await reader.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
+            {
+                foreach (var character in buffer.AsSpan(0, count))
+                {
+                    if (character == '\n')
+                    {
+                        if (separator > 0 && validHex && hexLength % 2 == 0) return true;
+                        position = 0; separator = -1; hexLength = 0; validHex = true; carriageReturn = false;
+                    }
+                    else if (character == ':') { separator = position++; hexLength = 0; validHex = true; carriageReturn = false; }
+                    else
+                    {
+                        position++;
+                        if (separator < 0) continue;
+                        if (character == '\r') { carriageReturn = true; continue; }
+                        validHex &= !carriageReturn && Uri.IsHexDigit(character);
+                        hexLength++;
+                    }
+                }
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+            return false;
+        }
+        catch (FileNotFoundException) { return false; }
+        catch (DirectoryNotFoundException) { return false; }
+    }
+
     /// <summary>Queries known target matches in a potfile; these are not necessarily recoveries made by this session.</summary>
     public async Task<IReadOnlyList<RecoveredResult>> ShowAsync(HashcatInstallation installation, HashcatJob job, CancellationToken cancellationToken = default)
     {

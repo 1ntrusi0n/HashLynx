@@ -57,6 +57,12 @@ public sealed class HashcatDeviceSelectionService
         }
     }
 
+    /// <summary>Earlier sample evidence only; SelectAsync still rechecks the reported topology before reuse.</summary>
+    public int? GetPreviouslyVerifiedDeviceId(HashcatInstallation installation)
+    {
+        lock (_cacheLock) return _verified.TryGetValue(InstallationKey(installation), out var verified) ? verified.DeviceId : null;
+    }
+
     public async Task<DeviceSelectionResult> SelectAsync(HashcatInstallation installation,
         IProgress<string>? progress = null, CancellationToken cancellationToken = default)
     {

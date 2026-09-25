@@ -71,6 +71,7 @@ internal sealed partial class SmokeApplication(string output) : Application
             }
 
             await CheckSimpleWorkflowAsync(shell, store, window);
+            await CheckUsabilityAsync(shell, services, store, window);
             await CheckMaskSourcesAsync(shell, services, store, window);
             await CheckWordlistLibraryAsync(shell, services, store, window);
             await CheckHintsAndQueueAsync(shell, store, window);
@@ -96,20 +97,6 @@ internal sealed partial class SmokeApplication(string output) : Application
                 await RenderAsync(window, "Inspector-input-" + input);
             }
 
-            shell.Attack.Family = 1;
-            shell.Attack.SelectedMaskSource = MaskSourceChoice.Text;
-            shell.Attack.Mask = "?d?d?d?d";
-            shell.Attack.ProfileName = "Synthetic smoke profile";
-            await ((AsyncCommand)shell.Attack.SaveProfileCommand).ExecuteAsync(null);
-            Require(shell.Attack.Profiles.Count == 1, "Saving a profile must populate the profile list.");
-            Require((await store.LoadProfilesAsync()).Single().Configuration.TargetPath == "", "Profiles must not save target contents.");
-            shell.Attack.SelectedProfile = shell.Attack.Profiles[0];
-            shell.Attack.Family = 0;
-            await ((AsyncCommand)shell.Attack.LoadProfileCommand).ExecuteAsync(null);
-            Require(shell.Attack.Family == 1 && shell.Attack.Mask == "?d?d?d?d", "Loading a profile must restore attack settings.");
-            await ((AsyncCommand)shell.Attack.DeleteProfileCommand).ExecuteAsync(null);
-            Require((await store.LoadProfilesAsync()).Count == 0, "Deleting a profile must persist its removal.");
-
             await ((AsyncCommand)shell.Attack.PreflightCommand).ExecuteAsync(null);
             Require(services.Notice.Contains("Hashcat", StringComparison.Ordinal), "Preflight without backend must explain configuration.");
             var backendPath = Environment.GetEnvironmentVariable("HASHLYNX_TEST_HASHCAT");
@@ -128,7 +115,7 @@ internal sealed partial class SmokeApplication(string output) : Application
             }
             listener.Flush();
             Require(errors.Length == 0, "WPF binding failures: " + errors);
-            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all navigation pages; four attack families; four target modes; three themes; narrow layout; profile save/load/delete; Basic preset/defaults; Expert custom rules and legacy profiles; starter wordlist; saved wordlist import, restart, selection, Combinator/Hybrid, deduplication, missing files, safe removal and failed/corrupt save handling; populated manual catalog expansion, selection and scrolling; populated running/failed Jobs with progress updates; inactive history deletion, Undo, file retention and save-failure rollback; saved Hardware default, Basic selection, Expert overrides, restart persistence; preflight error handling; drive selection, extraction, cancellation, stale-result rejection and removal; native formats hidden from settings, legacy native overrides ignored, including PDF; hints preview and invalid input handling; saved queue pause, failure, retry, recovery skipping and shutdown; completion banners; wordlist manager metadata, names, checkbox binding and failed-save recovery; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, automatic result loading, View recovered passwords navigation/reveal, stale-result clearing, native ZIP/RAR/7z/BitLocker/PDF extraction, confirmed automatic mode selection, and persistent extraction notes passed." : "") + (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice) ? " Real recovery: Start → Jobs → Results recovered the known NTLM fixture in Basic mode with the starter list, Normal preset, and saved Hardware default." : ""));
+            await File.WriteAllTextAsync(Path.Combine(output, "result.txt"), "PASS: missing-backend startup; all navigation pages; four attack families; four target modes; three themes; narrow layout; Basic preset/defaults; Expert custom rules; readiness guidance and red/amber/green states in Light/Dark themes; mask source selection and saved queue preset identity; starter wordlist; saved wordlist import, restart, selection, Combinator/Hybrid, deduplication, missing files, safe removal and failed/corrupt save handling; populated manual catalog expansion, selection and scrolling; populated running/failed Jobs with progress updates; inactive history deletion, Undo, file retention and save-failure rollback; saved Hardware default, Basic selection, Expert overrides, restart persistence; preflight error handling; drive selection, extraction, cancellation, stale-result rejection and removal; native formats hidden from settings, legacy native overrides ignored, including PDF; hints preview and invalid input handling; saved queue pause, failure, retry, recovery skipping and shutdown; completion banners; wordlist manager metadata, names, checkbox binding and failed-save recovery; zero binding errors." + (File.Exists(backendPath) ? " Installed backend: automatic identification blocks ambiguous Start, mode selection, catalog search, preset command preflight, automatic result loading, View recovered passwords navigation/reveal, stale-result clearing, native ZIP/RAR/7z/BitLocker/PDF extraction, confirmed automatic mode selection, and persistent extraction notes passed." : "") + (File.Exists(backendPath) && !string.IsNullOrWhiteSpace(recoveryDevice) ? " Real recovery: Start → Jobs → Results recovered the known NTLM fixture in Basic mode with the starter list, Normal preset, and saved Hardware default." : ""));
             Console.WriteLine("WPF smoke passed. Screenshots and report: " + output);
             Shutdown(0);
         }
@@ -158,11 +145,7 @@ internal sealed partial class SmokeApplication(string output) : Application
         var picker = Find<ComboBox>(window, "SavedWordlistPicker");
         picker.SelectedItem = attack.SavedWordlistEntries.Single(entry => entry.Path == second);
         Require(attack.Wordlists.SequenceEqual(new[] { second }), "Choosing a saved list in the real dropdown must change the Basic attack.");
-        attack.ProfileName = "Saved wordlist smoke";
-        await ((AsyncCommand)attack.SaveProfileCommand).ExecuteAsync(null);
-        Require((await store.LoadProfilesAsync()).Single().Configuration.Attack.Wordlists.SequenceEqual(new[] { second }), "The attack builder must receive the selected saved path, not every library entry.");
-        attack.SelectedProfile = attack.Profiles.Single();
-        await ((AsyncCommand)attack.DeleteProfileCommand).ExecuteAsync(null);
+        Require(BuildDraft(attack).Attack.Wordlists.SequenceEqual(new[] { second }), "The attack builder must receive the selected saved path, not every library entry.");
         var scroll = Find<ScrollViewer>(window, "AttackScrollViewer");
         scroll.ScrollToVerticalOffset(scroll.VerticalOffset + picker.TranslatePoint(new Point(0, 0), scroll).Y - 100);
         await RenderAsync(window, "Saved-wordlists");
@@ -367,7 +350,7 @@ internal sealed partial class SmokeApplication(string output) : Application
         window.Width = 1380; window.Height = 920;
         attack.ToggleRulesHelpCommand.Execute(null);
 
-        // Expert leftovers must not secretly affect a later Basic attack or profile.
+        // Expert leftovers must not secretly affect a later Basic attack.
         attack.Expert = true;
         attack.UseCustomRules = true;
         attack.Rules.Add(Path.Combine(store.Paths.Root, "not-installed.rule"));
@@ -379,53 +362,21 @@ internal sealed partial class SmokeApplication(string output) : Application
         attack.ExtraArguments = "--force";
         attack.Session = "invalid / expert session";
         attack.Expert = false;
-        attack.ProfileName = "Basic preset regression";
-        await ((AsyncCommand)attack.SaveProfileCommand).ExecuteAsync(null);
-        var saved = (await store.LoadProfilesAsync()).Single().Configuration;
-        Require(saved.Attack.RulePresetId is null && saved.Attack.RuleFiles.Count == 0, "Basic No Rules must save no preset and no hidden custom rule paths.");
+        var saved = BuildDraft(attack);
+        Require(saved.Attack.RulePresetId is null && saved.Attack.RuleFiles.Count == 0, "Basic No Rules must use no preset and no hidden custom rule paths.");
         Require(saved.Attack.LeftRule is null && saved.Options.Devices.Count == 0 && saved.Options.TemperatureAbort is null, "Basic mode must use automatic controls.");
         Require(!saved.Options.OptimizedKernel && !saved.Options.DisablePotfile && saved.Options.ExtraArguments.Count == 0, "Hidden Expert options must not apply to Basic mode.");
-        attack.SelectedProfile = attack.Profiles.Single();
-        attack.SelectedRulePreset = attack.RulePresets.Single(preset => preset.Id == RulePresetCatalog.NormalId);
-        await ((AsyncCommand)attack.LoadProfileCommand).ExecuteAsync(null);
-        Require(!attack.Expert && !attack.UseCustomRules && attack.SelectedRulePreset.Id is null, "Loading a No Rules profile must restore No Rules without requiring Expert mode.");
-        await ((AsyncCommand)attack.DeleteProfileCommand).ExecuteAsync(null);
-
         attack.SelectedRulePreset = attack.RulePresets.Single(preset => preset.Id == RulePresetCatalog.HeavyId);
-        attack.ProfileName = "Explicit preset regression";
-        await ((AsyncCommand)attack.SaveProfileCommand).ExecuteAsync(null);
-        attack.SelectedProfile = attack.Profiles.Single();
+        Require(BuildDraft(attack).Attack.RulePresetId == RulePresetCatalog.HeavyId && BuildDraft(attack).Attack.RuleFiles.Count == 0,
+            "An explicitly selected Basic preset must replace hidden custom rules in the draft.");
         attack.SelectedRulePreset = attack.RulePresets[0];
-        await ((AsyncCommand)attack.LoadProfileCommand).ExecuteAsync(null);
-        Require(attack.SelectedRulePreset.Id == RulePresetCatalog.HeavyId && !attack.UseCustomRules, "A saved explicit preset must retain its selection.");
-        await ((AsyncCommand)attack.DeleteProfileCommand).ExecuteAsync(null);
-
-        // A pre-preset dictionary profile must preserve its original custom-rule semantics.
-        var legacy = new AttackProfile { Name = "Legacy custom rules", Configuration = new HashcatJob { Attack = new AttackConfiguration { RuleFiles = [Path.Combine(store.Paths.Root, "legacy.rule")] } } };
-        attack.Profiles.Add(legacy);
-        attack.SelectedProfile = legacy;
-        await ((AsyncCommand)attack.LoadProfileCommand).ExecuteAsync(null);
-        Require(attack.Expert && attack.UseCustomRules && attack.Rules.Single().EndsWith("legacy.rule", StringComparison.Ordinal), "Legacy custom profiles must visibly open Expert mode without replacing rules.");
+        Require(BuildDraft(attack).Attack.RulePresetId is null, "Choosing No Rules must clear the previously selected preset from the draft.");
+        attack.Expert = true;
+        attack.Devices = ""; attack.Temperature = ""; attack.Session = "hashlynx-smoke";
+        Require(BuildDraft(attack).Attack.RuleFiles.SequenceEqual(attack.Rules), "Expert mode must use the selected custom rule files.");
         await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
         Require(Find<FrameworkElement>(window, "RunOptionsPanel").IsVisible && Find<FrameworkElement>(window, "CustomRulesPanel").IsVisible, "Expert panels must become visible.");
         await RenderAsync(window, "Expert-custom-rules");
-        foreach (var incompatible in new[]
-        {
-            new AttackConfiguration { Kind = "future-attack" },
-            new AttackConfiguration { Kind = AttackFamilies.Mask, RuleFiles = ["custom.rule"] },
-            new AttackConfiguration { Kind = AttackFamilies.Mask, RulePresetId = RulePresetCatalog.QuickId }
-        })
-        {
-            attack.SelectedProfile = new AttackProfile { Name = "Unsupported fixture", Configuration = new HashcatJob { Attack = incompatible } };
-            await ((AsyncCommand)attack.LoadProfileCommand).ExecuteAsync(null);
-            Require(attack.Family == 0 && attack.UseCustomRules && attack.Rules.Single().EndsWith("legacy.rule", StringComparison.Ordinal), "Unsupported profile combinations must be rejected before changing the editor.");
-        }
-        attack.SelectedProfile = legacy;
-        await ((AsyncCommand)attack.DeleteProfileCommand).ExecuteAsync(null);
-        attack.SelectedProfile = new AttackProfile { Name = "Legacy no-rule fixture", Configuration = new HashcatJob() };
-        await ((AsyncCommand)attack.LoadProfileCommand).ExecuteAsync(null);
-        Require(!attack.UseCustomRules && attack.SelectedRulePreset.Id is null && attack.Rules.Count == 0, "Legacy no-rule dictionary profiles must load as No Rules.");
-        attack.SelectedProfile = null;
         attack.Expert = false;
         attack.UseCustomRules = false;
         attack.Rules.Clear();
@@ -623,12 +574,7 @@ internal sealed partial class SmokeApplication(string output) : Application
         foreach (var (expert, deviceText, expected) in new[] { (false, "invalid hidden override", 3), (true, "", 3), (true, "4", 4), (false, "4", 3) })
         {
             attack.Expert = expert; attack.Devices = deviceText;
-            attack.ProfileName = "Device default fixture";
-            await ((AsyncCommand)attack.SaveProfileCommand).ExecuteAsync(null);
-            var profile = attack.Profiles.Last();
-            Require(profile.Configuration.Options.Devices.SequenceEqual([expected]), "Basic must use the saved default; only visible Expert IDs may override it.");
-            attack.SelectedProfile = profile;
-            await ((AsyncCommand)attack.DeleteProfileCommand).ExecuteAsync(null);
+            Require(BuildDraft(attack).Options.Devices.SequenceEqual([expected]), "Basic must use the saved default; only visible Expert IDs may override it.");
         }
         await RenderAsync(window, "Basic-saved-device");
         Require(Find<TextBlock>(window, "RecoveryDeviceSummary").Text.Contains("Device 3", StringComparison.Ordinal), "Basic mode must display its recovery device.");
@@ -636,10 +582,10 @@ internal sealed partial class SmokeApplication(string output) : Application
         await restarted.InitializeAsync();
         var reopened = new AttackViewModel(restarted, new JobsViewModel(restarted), () => { });
         await reopened.InitializeAsync();
-        Require(!reopened.Expert && reopened.RecoveryDeviceSummary.Contains("Device 3", StringComparison.Ordinal), "The device default must survive restart without loading a profile or enabling Expert mode.");
+        Require(!reopened.Expert && reopened.RecoveryDeviceSummary.Contains("Device 3", StringComparison.Ordinal), "The device default must survive restart without enabling Expert mode.");
         await ((AsyncCommand)hardware.AutomaticCommand).ExecuteAsync(null);
         Require((await store.LoadSettingsAsync()).DefaultDeviceIds.Count == 0 && attack.RecoveryDeviceSummary.Contains("automatic", StringComparison.Ordinal), "Clearing a default must persist and refresh Basic mode.");
-        hardware.Devices.Clear(); attack.Devices = ""; attack.SelectedProfile = null;
+        hardware.Devices.Clear(); attack.Devices = "";
     }
 
     private async Task CheckRecoveryWorkflowAsync(ShellViewModel shell, AppServices services, Window window, string device)
@@ -669,7 +615,7 @@ internal sealed partial class SmokeApplication(string output) : Application
         var job = shell.Jobs.Selected!;
         try
         {
-            Require(job.Record.Configuration.Options.Devices.SequenceEqual([deviceId]), "Basic Start must use the saved Hardware default without a profile.");
+            Require(job.Record.Configuration.Options.Devices.SequenceEqual([deviceId]), "Basic Start must use the saved Hardware default with no additional attack setup.");
             using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
             while (job.Record.State is JobState.Ready or JobState.Running or JobState.Paused) await Task.Delay(100, timeout.Token);
             Require(job.Record.State == JobState.Cracked && job.Record.ExitCode == 0, "Known-answer recovery failed: " + job.Diagnostic);
