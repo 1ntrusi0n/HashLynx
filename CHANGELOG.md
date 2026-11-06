@@ -10,6 +10,10 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 - Successful BitLocker extraction now displays the hash directly below Source / context and the extraction button. The read-only, selectable field supports copying all extracted password-protector records from connected volumes or raw partition images and clears when the target changes.
 
+### Changed
+
+- About and README now show the creator credit as **Created by 1ntrusi0n**.
+
 ## [0.2.1] - 2026-11-06
 
 ### Fixed
@@ -26,7 +30,7 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 - Three guided Beginner recovery choices: Wordlist, Known password pattern, and Hashcat 8 Likely passwords (PCFG). Expert mode adds PCFG constraints and remembered hints, words inside patterns, expanded rule support, and separate-list rule concatenation.
 - Optional GitHub release checks, an unchecked **Check for Updates Automatically** preference, explicit download and restart actions, package integrity checks, and a bundled first-party updater with file ownership validation and rollback. Application updates preserve the separate backend and local recovery data.
-- **Created by err0r** credit, assembly-derived application version, an offline changelog, and contextual help throughout recovery controls.
+- Creator credit, assembly-derived application version, an offline changelog, and contextual help throughout recovery controls.
 - Windows release packaging with an application file manifest, SHA-256 checksums, and a manual workflow that prepares a draft GitHub release.
 
 ### Changed

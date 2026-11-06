@@ -4,7 +4,7 @@
 
 A local Windows desktop workspace for **Hashcat**: inspect recovery targets, configure attacks, monitor jobs, and review results from one native WPF interface.
 
-**Version 0.2.2 — Created by err0r.** HashLynx orchestrates the official Hashcat executable; it does not implement a cracking engine. It is intended for legitimate password recovery, authorized security auditing, research, labs, and CTFs.
+**Version 0.2.2 — Created by 1ntrusi0n.** HashLynx orchestrates the official Hashcat executable; it does not implement a cracking engine. It is intended for legitimate password recovery, authorized security auditing, research, labs, and CTFs.
 
 HashLynx is an independent GUI frontend. Hashcat is a separate third-party project, is not developed by HashLynx, and does not sponsor or endorse this application. Users must separately obtain and configure Hashcat. This repository and its publish output do not bundle it.
 

@@ -30,7 +30,7 @@ internal sealed partial class SmokeApplication
         {
             shell.ShowSettings();
             await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
-            Require(Find<TextBlock>(window, "CreatorCreditText").Text == "Created by err0r", "About shows the creator credit.");
+            Require(Find<TextBlock>(window, "CreatorCreditText").Text == "Created by 1ntrusi0n", "About shows the creator credit.");
             Require(Equals(Find<CheckBox>(window, "AutoUpdatesCheckBox").Content, "Check for Updates Automatically"), "The automatic check preference is visible.");
             Find<Expander>(window, "ChangelogExpander").IsExpanded = true;
             ScrollToSettingsField(Find<TextBlock>(window, "AboutVersionText"));
