@@ -81,6 +81,7 @@ internal sealed partial class SmokeApplication(string output) : Application
             await CheckDefaultDeviceAsync(shell, store, window);
             await CheckManualCatalogAsync(shell, window, true);
             await CheckPopulatedJobsAsync(shell, window);
+            await CheckJobProgressAsync(shell, services, store, window);
             await CheckSessionHistoryAsync(shell, store, window);
             await CheckSessionResultsIsolationAsync(shell, store, window);
             await CheckZipConfigurationAsync(shell, window);

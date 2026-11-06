@@ -9,7 +9,7 @@ using System.Windows.Threading;
 
 namespace HashLynx.UI.ViewModels;
 
-public sealed class JobViewModel(JobRecord record) : ObservableObject
+public sealed partial class JobViewModel(JobRecord record) : ObservableObject
 {
     private RestoreAvailability _restoreAvailability = new(false, "Select this session to check whether its checkpoint can be restored.");
     private bool _isPreparing;
@@ -28,13 +28,11 @@ public sealed class JobViewModel(JobRecord record) : ObservableObject
     public string NextActionLabel => Outcome.ActionLabel;
     public bool HasNextAction => Outcome.Action != JobNextAction.None;
     public string ComputeDevice => Record.Configuration.Options.Devices.Count == 0 ? "Automatic device check before recovery" : "Recovery device: " + string.Join(", ", Record.Configuration.Options.Devices);
-    public string ProgressNote => Record.Configuration.Attack.MaskPresetId is not null || !string.IsNullOrWhiteSpace(Record.Configuration.Attack.MaskFile)
-        ? "Progress and estimated completion refer to the current mask, not the entire mask list." : "";
-    public double Progress => Record.LatestStatus?.ProgressPercent ?? 0;
+    public string ProgressNote => WorkSummary.ScopeNote;
+    public double Progress => WorkSummary.OverallPercent ?? WorkSummary.PassPercent ?? 0;
     public string Speed => Record.LatestStatus is { } status ? $"{status.SpeedHashesPerSecond:N0} H/s" : "Awaiting status";
     public string Recovered => Record.LatestStatus is { } status ? $"{status.RecoveredHashes:N0} / {status.TotalHashes:N0}" : "—";
-    public string Eta => Record.LatestStatus?.EstimatedCompletion?.LocalDateTime.ToString("g") ?? "—";
-    public string Elapsed => Record.StartedAt is { } start ? ((Record.FinishedAt ?? DateTimeOffset.UtcNow) - start).ToString(@"hh\:mm\:ss") : "—";
+    public string Elapsed => Record.StartedAt is { } start ? FormatDuration((Record.FinishedAt ?? DateTimeOffset.UtcNow) - start) : "—";
     public string Rejected => Record.LatestStatus?.RejectedCandidates.ToString("N0") ?? "—";
     public string RestorePoint => Record.LatestStatus?.RestorePoint.ToString("N0") ?? "—";
     public string Diagnostic => Record.Diagnostic ?? "Waiting for Hashcat status updates.";
@@ -50,7 +48,7 @@ public sealed class JobViewModel(JobRecord record) : ObservableObject
     public void Refresh() => Raise("");
 }
 
-public sealed class JobsViewModel : ObservableObject
+public sealed partial class JobsViewModel : ObservableObject
 {
     private readonly AppServices _services;
     private readonly Dictionary<Guid, HashcatRunningJob> _running = [];
@@ -64,7 +62,18 @@ public sealed class JobsViewModel : ObservableObject
     private JobViewModel? _selected;
     private readonly Stack<(JobViewModel Job, int Index)> _deleted = [];
     public ObservableCollection<JobViewModel> Jobs { get; } = [];
-    public JobViewModel? Selected { get => _selected; set { if (Set(ref _selected, value)) { CommandManager.InvalidateRequerySuggested(); if (value is not null) _ = RefreshRestoreSafelyAsync(value); } } }
+    public JobViewModel? Selected
+    {
+        get => _selected;
+        set
+        {
+            if (!Set(ref _selected, value)) return;
+            CommandManager.InvalidateRequerySuggested();
+            if (value is null) return;
+            _ = RefreshRestoreSafelyAsync(value);
+            if (value.Record.State != JobState.Ready) _ = EnsureWordlistStatisticsAsync(value);
+        }
+    }
     public bool HasRunning => _running.Count > 0 || _preparing.Count > 0;
     public ICommand PauseCommand { get; }
     public ICommand ResumeCommand { get; }
@@ -83,6 +92,8 @@ public sealed class JobsViewModel : ObservableObject
     public JobsViewModel(AppServices services)
     {
         _services = services;
+        _wordlistStatisticsService = new(services.Store);
+        _wordlistLifetime = CancellationTokenSource.CreateLinkedTokenSource(services.LifetimeToken);
         services.BackendChanged += () => { foreach (var job in Jobs) job.SetRestoreAvailability(new(false, "The backend changed. Select the session to recheck its checkpoint.")); if (Selected is { } selected) _ = RefreshRestoreSafelyAsync(selected); };
         ViewResultsCommand = new AsyncCommand(async _ => { if (Selected is { } job && ResultsRequested is { } open) await open(job); }, services.ReportError, _ => Selected is not null);
         DeleteCommand = new AsyncCommand(_ => DeleteSelectedAsync(), services.ReportError, _ => Selected is { } job && CanDelete(job));
@@ -117,6 +128,9 @@ public sealed class JobsViewModel : ObservableObject
     {
         using var operation = _services.BeginOperation();
         if (Selected is not { } job || !CanDelete(job)) return;
+        if (_wordlistCancellations.TryGetValue(job.Record.Id, out var counting)) counting.Cancel();
+        if (_wordlistTasks.TryGetValue(job.Record.Id, out var countTask)) await countTask;
+        if (!CanDelete(job)) return;
         var index = Jobs.IndexOf(job);
         Jobs.Remove(job);
         Selected = Jobs.ElementAtOrDefault(Math.Min(index, Jobs.Count - 1));
@@ -217,7 +231,7 @@ public sealed class JobsViewModel : ObservableObject
         Raise(nameof(HasRunning)); CommandManager.InvalidateRequerySuggested();
         var progress = new Progress<HashcatEvent>(item =>
         {
-            if (item.Status is not null) job.Record.LatestStatus = item.Status;
+            if (item.Status is not null) job.ObserveStatus(item.Status);
             if (item.Kind == "error" && item.Message is not null)
             {
                 if (string.IsNullOrWhiteSpace(job.Record.Diagnostic) || job.Record.Diagnostic.StartsWith("Hashcat is running", StringComparison.Ordinal)) job.Record.Diagnostic = item.Message;
@@ -274,6 +288,8 @@ public sealed class JobsViewModel : ObservableObject
         }
         _running[job.Record.Id] = running;
         job.Record.State = JobState.Running; job.Record.StartedAt = DateTimeOffset.UtcNow; job.Record.FinishedAt = null;
+        job.BeginProgressTracking();
+        _ = EnsureWordlistStatisticsAsync(job);
         job.Record.Diagnostic = "Hashcat is running locally. Live statistics appear as the backend reports them.";
         job.Refresh(); Raise(nameof(HasRunning));
         _observers.RemoveAll(task => task.IsCompleted);
@@ -295,7 +311,7 @@ public sealed class JobsViewModel : ObservableObject
         catch (Exception exception) { _services.DeviceSelection.Invalidate(); job.Record.State = JobState.Failed; job.Record.Diagnostic = "The backend stopped unexpectedly. See the sanitized application log."; _services.ReportError(exception); }
         finally
         {
-            _running.Remove(job.Record.Id); job.Record.FinishedAt = DateTimeOffset.UtcNow; job.Refresh(); Raise(nameof(HasRunning)); CommandManager.InvalidateRequerySuggested();
+            _running.Remove(job.Record.Id); job.Record.FinishedAt = DateTimeOffset.UtcNow; job.FinishProgressTracking(); job.Refresh(); Raise(nameof(HasRunning)); CommandManager.InvalidateRequerySuggested();
             await RefreshSessionResultsAsync(job);
             await RefreshRestoreSafelyAsync(job);
             if (job.HasRecovered) _services.Notice = "Passwords recovered. On Jobs, select the session and choose View recovered passwords.";
@@ -328,10 +344,12 @@ public sealed class JobsViewModel : ObservableObject
     public async Task StopAllAsync()
     {
         _clock.Stop();
+        _wordlistLifetime.Cancel();
         foreach (var preparation in _preparing.Values) preparation.Cancellation.Cancel();
         try { await Task.WhenAll(_launches.ToArray()); } catch { /* Launch callers receive errors; their records are saved before completion. */ }
         foreach (var running in _running.Values.ToArray()) await running.StopAsync();
         await Task.WhenAll(_observers.ToArray());
+        await Task.WhenAll(_wordlistTasks.Values.ToArray());
         await _periodicSave;
         await SaveAsync();
     }

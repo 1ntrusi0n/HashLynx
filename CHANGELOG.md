@@ -4,6 +4,18 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-11-06
+
+### Added
+
+- Jobs now shows total wordlist lines beneath **Checking password guesses**, with background counting and reuse of current saved file metadata. Counts remain separate from rule-expanded guessing work.
+- Numeric progress, adaptive remaining time, estimated active duration, and completion time use recent and earlier progress from the current pass. Pause, restore, stale status, and new wordlist/pattern passes reset or suspend estimates appropriately.
+- Multiple sequential wordlists can show approximate overall progress weighted by their line counts when the backend identifies the current source. Ambiguous or multi-pass searches clearly label current-pass scope.
+
+### Fixed
+
+- Status parsing preserves large integer counters precisely, handles unavailable backend time estimates, and retains only numeric source-queue metadata for progress tracking.
+
 ## [0.2.2] - 2026-11-06
 
 ### Added

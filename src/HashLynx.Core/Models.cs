@@ -84,6 +84,8 @@ public sealed class JobRecord
     public string? Diagnostic { get; set; }
     public string? RestorePath { get; set; }
     public JobStatusSnapshot? LatestStatus { get; set; }
+    public List<JobWordlistInfo>? WordlistStatistics { get; set; }
+    public JobProgressEstimate? ProgressEstimate { get; set; }
     public string? BackendVersion { get; set; }
     public string? BackendRuntimeDirectory { get; set; }
     public string? ConfigurationFingerprint { get; set; }
@@ -117,6 +119,11 @@ public sealed class JobStatusSnapshot
     public long RestorePoint { get; set; }
     public long Progress { get; set; }
     public long ProgressTotal { get; set; }
+    public long? SourceCount { get; set; }
+    public long? SourceIndex { get; set; }
+    public long? ModifierCount { get; set; }
+    public long? ModifierIndex { get; set; }
+    public DateTimeOffset? ObservedAt { get; set; }
     public DateTimeOffset? StartedAt { get; set; }
     public DateTimeOffset? EstimatedCompletion { get; set; }
     public List<DeviceStatus> Devices { get; set; } = [];

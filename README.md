@@ -4,7 +4,7 @@
 
 A local Windows desktop workspace for **Hashcat**: inspect recovery targets, configure attacks, monitor jobs, and review results from one native WPF interface.
 
-**Version 0.2.2 — Created by 1ntrusi0n.** HashLynx orchestrates the official Hashcat executable; it does not implement a cracking engine. It is intended for legitimate password recovery, authorized security auditing, research, labs, and CTFs.
+**Version 0.2.3 — Created by 1ntrusi0n.** HashLynx orchestrates the official Hashcat executable; it does not implement a cracking engine. It is intended for legitimate password recovery, authorized security auditing, research, labs, and CTFs.
 
 HashLynx is an independent GUI frontend. Hashcat is a separate third-party project, is not developed by HashLynx, and does not sponsor or endorse this application. Users must separately obtain and configure Hashcat. This repository and its publish output do not bundle it.
 
@@ -20,7 +20,7 @@ Download the Windows x64 application from [GitHub Releases](https://github.com/1
 - Built-in **Common patterns (1,000)** for Mask attacks, alongside custom masks and files. Sources, corpus limits, and regeneration are documented in [built-in masks](docs/built-in-masks.md).
 - Automatic validation when starting recovery, with run options, a copyable command preview, and a separate Preflight button in Expert mode. Commands execute with `ProcessStartInfo.ArgumentList`, never through a shell.
 - A live **Ready to recover** checklist for the target, attack inputs and device setup, with direct links to the relevant controls and colors that distinguish ready, missing and pending items.
-- Asynchronous jobs, parsed JSON status metrics, stop, job history, interrupted-job detection, and validated restoration from compatible checkpoints.
+- Asynchronous jobs with wordlist line counts, numeric progress, and remaining-time estimates that adapt to recent and earlier progress in the current pass; stop, job history, interrupted-job detection, and validated restoration from compatible checkpoints.
 - Formatted Markdown release history in Settings / About and update release notes, with selectable text, theme-aware headings/lists/code/tables, and links that copy their address when activated. Optional GitHub version checks and user-approved application updates include package verification and rollback.
 - Session-specific recovered results, an all-sessions view, plaintext hide/reveal, copy, and export. Completion banners link to results; optional Windows notifications keep passwords hidden. Hardware discovery includes a bounded known-answer recovery test per device.
 - An extensible extractor registry for PDF, ZIP, RAR, 7-Zip, BitLocker, Microsoft Office, and KeePass. All seven formats are built in and need no extractor configuration.
@@ -34,6 +34,8 @@ Hashcat's `--identify` is the primary authority. A unique match is selected auto
 For hash files, a streaming scan counts total, blank, candidate, and problem lines, with bounded structural grouping and problem-line summaries. These structural checks do not prove that every line is a valid hash for the selected mode. The original file is never cleaned or modified in place.
 
 Paste and extracted targets are saved as local working target files so child-process arguments do not need to contain the hash itself. Catalog parsing is isolated and cached by backend version. An older backend without optional identification or JSON-status support can still be configured; unsupported functionality produces a clear message.
+
+On **Jobs**, wordlist line counts appear beneath **Checking password guesses**. Percentages measure guessing work, including rule variations; they are distinct from physical file lines. Remaining-time and active-duration estimates adjust to the current pass's observed progress, exclude pauses, and stop when status becomes stale. See [job progress and timing](docs/job-progress.md) for multi-wordlist, restore, and estimate limitations.
 
 ## Requirements and setup
 

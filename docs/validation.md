@@ -1,5 +1,12 @@
 # Validation
 
+## Wordlist progress and adaptive timing / 0.2.3 - 2026-11-06
+
+- Restore and final Release build passed with zero warnings/errors. All 732 standard tests passed (122 Core, 257 Hashcat, 81 Persistence, 216 Extractors/Drives, 56 Updates); 13 backend/live-device cases remained opt-in. Reports: `artifacts/test-results-progress-023`.
+- New fixtures cover precise large counters and private-field exclusion, source queue interpretation, physical line counts and metadata cache invalidation, corrupt-library preservation, asynchronous cancellation, progress smoothing, startup fallback, pause/stall handling, restored baselines, counter resets, and serialized estimate summaries.
+- Offline WPF smoke passed with zero binding errors. It checks real Jobs bindings, responsive background counting, updater busy guards, shutdown cancellation, persistence, estimate changes after a slowdown, paused/finished/restored rows, and wordlist-free attacks. Reports: `artifacts/ui-smoke-progress-023/job-progress-result.txt` and `result.txt`.
+- Narrow Light/Dark screenshots were reviewed: wordlist size, percentage, remaining time, active duration, and explanatory text remain readable together. No backend, GPU, live volume, or user recovery data was used.
+
 ## BitLocker extracted hash display / 0.2.2 - 2026-11-06
 
 - Restore and Release build passed with zero warnings/errors. All 613 standard tests passed; 13 backend/live-device cases remained opt-in. Reports: `artifacts/test-results-bitlocker-022`.

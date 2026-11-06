@@ -110,9 +110,11 @@ public static class HashcatStatusParser
             if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("status", out var state)) return false;
             var progress = Pair(root, "progress");
             var recovered = Pair(root, "recovered_hashes");
+            var guess = root.TryGetProperty("guess", out var guessValue) && guessValue.ValueKind == JsonValueKind.Object
+                ? guessValue : default;
             status = new()
             {
-                State = state.ValueKind == JsonValueKind.String ? state.GetString() ?? "Unknown" : StateName((int)Number(state)),
+                State = state.ValueKind == JsonValueKind.String ? state.GetString() ?? "Unknown" : StateName(Int32(state) ?? -1),
                 Progress = progress.First,
                 ProgressTotal = progress.Second,
                 ProgressPercent = progress.Second > 0 ? Math.Clamp(100d * progress.First / progress.Second, 0, 100) : 0,
@@ -120,6 +122,14 @@ public static class HashcatStatusParser
                 TotalHashes = recovered.Second,
                 RejectedCandidates = Integer(root, "rejected"),
                 RestorePoint = Integer(root, "restore_point"),
+                // These are source/mask queue positions, not word counts. Never retain guess_base or
+                // guess_mod: their contents can be a literal password pattern rather than a file path.
+                SourceCount = OptionalNonnegativeInteger(guess, "guess_base_count"),
+                SourceIndex = OptionalNonnegativeInteger(guess, "guess_base_offset"),
+                ModifierCount = OptionalNonnegativeInteger(guess, "guess_mod_count"),
+                ModifierIndex = OptionalNonnegativeInteger(guess, "guess_mod_offset"),
+                // Neither supported backend version emits a status observation timestamp.
+                ObservedAt = DateTimeOffset.UtcNow,
                 StartedAt = Timestamp(root, "time_start"),
                 EstimatedCompletion = Timestamp(root, "estimated_stop")
             };
@@ -129,28 +139,53 @@ public static class HashcatStatusParser
                     var speed = Double(device, "speed");
                     status.Devices.Add(new()
                     {
-                        Id = (int)Integer(device, "device_id"), Name = String(device, "device_name"),
+                        Id = OptionalInt(device, "device_id") ?? 0, Name = String(device, "device_name"),
                         SpeedHashesPerSecond = speed,
                         Temperature = OptionalInt(device, "temp"), Utilization = OptionalInt(device, "util")
                     });
                 }
-            status.SpeedHashesPerSecond = status.Devices.Sum(d => d.SpeedHashesPerSecond);
+            var totalSpeed = status.Devices.Sum(d => d.SpeedHashesPerSecond);
+            status.SpeedHashesPerSecond = double.IsFinite(totalSpeed) ? totalSpeed : 0;
             return true;
         }
-        catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException or OverflowException or ArgumentOutOfRangeException) { return false; }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException or OverflowException or ArgumentOutOfRangeException) { status = null; return false; }
     }
 
     private static string StateName(int value) => value switch { 0 => "Initializing", 1 => "Autotuning", 2 => "Self-test", 3 => "Running", 4 => "Paused", 5 => "Exhausted", 6 => "Cracked", 7 => "Aborted", 8 => "Quit", 9 => "Bypass", 10 => "Checkpoint", 11 => "Runtime limit", 13 => "Error", 14 => "Finished", 16 => "Autodetecting", _ => "Unknown" };
-    private static double Number(JsonElement value) => value.ValueKind == JsonValueKind.Number ? value.GetDouble() : double.TryParse(value.ToString(), CultureInfo.InvariantCulture, out var number) ? number : 0;
-    private static double Double(JsonElement root, string key) => root.TryGetProperty(key, out var value) ? Number(value) : 0;
-    private static long Integer(JsonElement root, string key) => (long)Double(root, key);
-    private static int? OptionalInt(JsonElement root, string key) => root.TryGetProperty(key, out var value) && value.ValueKind != JsonValueKind.Null ? (int)Number(value) : null;
+    private static double Double(JsonElement root, string key)
+    {
+        if (!root.TryGetProperty(key, out var value)) return 0;
+        double number;
+        var parsed = value.ValueKind == JsonValueKind.Number
+            ? value.TryGetDouble(out number)
+            : double.TryParse(value.ToString(), CultureInfo.InvariantCulture, out number);
+        return parsed && double.IsFinite(number) && number >= 0 ? number : 0;
+    }
+
+    // Counters can exceed double's exact integer range. Do not round them through a floating-point value.
+    private static long? Int64(JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.Number) return value.TryGetInt64(out var number) ? number : null;
+        if (value.ValueKind == JsonValueKind.String && long.TryParse(value.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var textNumber)) return textNumber;
+        return null;
+    }
+
+    private static int? Int32(JsonElement value) => Int64(value) is { } number && number is >= int.MinValue and <= int.MaxValue ? (int)number : null;
+    private static long? OptionalNonnegativeInteger(JsonElement root, string key) => root.ValueKind == JsonValueKind.Object && root.TryGetProperty(key, out var value) && Int64(value) is { } number && number >= 0 ? number : null;
+    private static long Integer(JsonElement root, string key) => OptionalNonnegativeInteger(root, key) ?? 0;
+    private static int? OptionalInt(JsonElement root, string key) => root.TryGetProperty(key, out var value) ? Int32(value) : null;
     private static string String(JsonElement root, string key) => root.TryGetProperty(key, out var value) ? value.ToString() : "";
-    private static (long First, long Second) Pair(JsonElement root, string key) => root.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.Array && value.GetArrayLength() >= 2 ? ((long)Number(value[0]), (long)Number(value[1])) : (0, 0);
+    private static (long First, long Second) Pair(JsonElement root, string key)
+    {
+        if (!root.TryGetProperty(key, out var value) || value.ValueKind != JsonValueKind.Array || value.GetArrayLength() < 2) return (0, 0);
+        return Int64(value[0]) is { } first && first >= 0 && Int64(value[1]) is { } second && second >= 0 ? (first, second) : (0, 0);
+    }
+
     private static DateTimeOffset? Timestamp(JsonElement root, string key)
     {
         var seconds = Integer(root, key);
-        return seconds > 0 && seconds < 253402300799 ? DateTimeOffset.FromUnixTimeSeconds(seconds) : null;
+        // Hashcat uses 1 for an overflowing estimate; 0 also means no usable timestamp.
+        return seconds > 1 && seconds <= 253402300799 ? DateTimeOffset.FromUnixTimeSeconds(seconds) : null;
     }
 }
 
