@@ -14,7 +14,9 @@ public sealed partial class AttackViewModel
      nameof(SelectedMaskSource), nameof(Mask), nameof(MaskFile), nameof(Charset1), nameof(Charset2), nameof(Charset3), nameof(Charset4),
      nameof(Increment), nameof(IncrementMinimum), nameof(IncrementMaximum), nameof(LeftWordlist), nameof(RightWordlist),
      nameof(LeftRule), nameof(RightRule), nameof(Loopback), nameof(Devices), nameof(OptimizedKernel), nameof(Workload),
-     nameof(ExtraArguments), nameof(DisablePotfile), nameof(PotfilePath), nameof(OutputPath), nameof(Temperature), nameof(Session)];
+     nameof(ExtraArguments), nameof(DisablePotfile), nameof(PotfilePath), nameof(OutputPath), nameof(Temperature), nameof(Session),
+     nameof(WordlistPattern), nameof(RulesConcatenated), nameof(PcfgUseHints), nameof(PcfgHintWords), nameof(PcfgConstraint),
+     nameof(PcfgMinimumLength), nameof(PcfgMaximumLength), nameof(PcfgShape)];
     private CancellationTokenSource? _readinessCancellation;
     private string _targetReadiness = "Add a target to begin.", _inputsReadiness = "Choose a wordlist or mask.", _deviceReadiness = "Set up Hashcat in Settings.";
     private string _readinessSummary = "Complete the items below. Start recovery runs the final checks.";
@@ -125,7 +127,16 @@ public sealed partial class AttackViewModel
         var installation = _services.Installation;
         var validationMessage = Inspector.ValidationMessage;
         var job = BuildDraft(path);
-        var checks = await Task.Run(() => (Readable: AttackReadiness.IsReadableFile(path), Errors: AttackReadiness.CheckInputs(job.Attack, _rulePresets, _maskPresets)), token);
+        var pendingHints = IsPcfg && Expert && PcfgUseHints && _preparedPcfgHintFile is null;
+        string? hintError = null;
+        if (pendingHints)
+        {
+            try { HashcatPcfgHints.ValidateWords(PcfgHintWords); }
+            catch (ArgumentException exception) { hintError = exception.Message; }
+            // Draft readiness checks the words in memory. Preflight writes and validates the immutable hint file.
+            job.Attack.Pcfg!.UseHints = false;
+        }
+        var checks = await Task.Run(() => (Readable: AttackReadiness.IsReadableFile(path), Errors: AttackReadiness.CheckInputs(job.Attack, _rulePresets, _maskPresets, installation?.Capabilities)), token);
         token.ThrowIfCancellationRequested();
         var supplied = inputMode == 0 ? textProvided : inputMode == 3 ? driveSelected || prepared : checks.Readable;
         TargetReady = supplied && selectedMode is not null && (inputMode < 2 || prepared) && string.IsNullOrEmpty(validationMessage);
@@ -134,8 +145,10 @@ public sealed partial class AttackViewModel
             : TargetReady ? $"Ready for validation — {selectedMode!.Name}."
             : selectedMode is null && Inspector.Matches.Count > 1 ? "Choose the hash type that matches your source from the detected possibilities."
             : "Target selected — Start will analyze it, or use Analyze target below.";
-        InputsReady = checks.Errors.Count == 0;
-        InputsReadiness = InputsReady ? "Ready for validation — your wordlist / mask and rule selections are available." : string.Join(" ", checks.Errors.Take(2));
+        InputsReady = checks.Errors.Count == 0 && hintError is null && string.IsNullOrEmpty(MethodAvailability);
+        InputsReadiness = !string.IsNullOrEmpty(MethodAvailability) ? MethodAvailability : hintError ?? (InputsReady
+            ? IsPcfg ? "Ready for validation — Hashcat’s local probability model will supply candidates." : "Ready for validation — your wordlist / pattern and rule selections are available."
+            : string.Join(" ", checks.Errors.Take(2)));
         var previousDevice = installation is null ? null : _services.DeviceSelection.GetPreviouslyVerifiedDeviceId(installation);
         DeviceReady = previousDevice is not null && (job.Options.Devices.Count == 0 || job.Options.Devices.SequenceEqual([previousDevice.Value]));
         DeviceReadiness = installation is null ? "Setup needed — locate and validate Hashcat in Settings."

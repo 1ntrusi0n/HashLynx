@@ -183,7 +183,7 @@ public sealed class HashcatDeviceSelectionService
     };
 
     private static string InstallationKey(HashcatInstallation installation) =>
-        JsonSerializer.Serialize(new[] { Path.GetFullPath(installation.ExecutablePath), installation.Version });
+        installation.CacheIdentity;
 
     private sealed record VerifiedDevice(string Topology, int DeviceId);
 }

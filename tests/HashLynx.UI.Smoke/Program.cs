@@ -63,6 +63,7 @@ internal sealed partial class SmokeApplication(string output) : Application
             Require(services.Installation is null, "An absent backend must not be treated as connected.");
             Require(shell.Selected.Page == shell.Settings, "Missing backend must open Settings.");
             Require(services.Notice.Contains("Settings", StringComparison.Ordinal), "Missing backend must explain setup.");
+            await CheckUpdatesAsync(shell, services, store, window);
 
             foreach (var page in shell.Navigation)
             {
@@ -71,6 +72,7 @@ internal sealed partial class SmokeApplication(string output) : Application
             }
 
             await CheckSimpleWorkflowAsync(shell, store, window);
+            await CheckModernAttackChoicesAsync(shell, services, store, window);
             await CheckUsabilityAsync(shell, services, store, window);
             await CheckMaskSourcesAsync(shell, services, store, window);
             await CheckWordlistLibraryAsync(shell, services, store, window);
@@ -85,10 +87,10 @@ internal sealed partial class SmokeApplication(string output) : Application
             await CheckBitLockerDriveAsync(shell, driveService, window);
 
             shell.Selected = shell.Navigation[0];
-            for (var family = 0; family < 4; family++)
+            for (var family = 0; family < 6; family++)
             {
-                shell.Attack.Family = family;
                 shell.Attack.Expert = true;
+                shell.Attack.Family = family;
                 await RenderAsync(window, "Attack-family-" + family);
             }
             for (var input = 0; input < 4; input++)
@@ -154,15 +156,18 @@ internal sealed partial class SmokeApplication(string output) : Application
         Require(restarted.SavedWordlists.SequenceEqual(attack.SavedWordlists), "The saved library must survive a new view model and store read.");
         restarted.SelectedSavedWordlist = first;
         Require(restarted.Wordlists.SequenceEqual(new[] { first }), "A reloaded entry must select the original path.");
+        attack.Expert = true;
         attack.Family = 3;
         await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
         Find<ComboBox>(window, "SavedLeftWordlistPicker").SelectedItem = first;
         Find<ComboBox>(window, "SavedRightWordlistPicker").SelectedItem = second;
         Require(attack.LeftWordlist == first && attack.RightWordlist == second, "Combinator must use saved paths independently on each side.");
         attack.Family = 2;
+        attack.Wordlists.Clear();
         picker.SelectedItem = attack.SavedWordlistEntries.Single(entry => entry.Path == first);
         Require(attack.Wordlists.SequenceEqual(new[] { first }), "Hybrid must use the same saved library.");
         attack.Family = 0;
+        attack.Expert = false;
         picker.SelectedItem = attack.SavedWordlistEntries.Single(entry => entry.Path == second);
         attack.Expert = true;
         picker.SelectedItem = attack.SavedWordlistEntries.Single(entry => entry.Path == first);

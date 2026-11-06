@@ -11,6 +11,7 @@ namespace HashLynx.UI.ViewModels;
 
 public sealed class JobViewModel(JobRecord record) : ObservableObject
 {
+    private RestoreAvailability _restoreAvailability = new(false, "Select this session to check whether its checkpoint can be restored.");
     private bool _isPreparing;
     private bool? _sessionResultsAvailable;
     public bool? SessionResultsAvailable { get => _sessionResultsAvailable; set { if (Set(ref _sessionResultsAvailable, value)) Refresh(); } }
@@ -43,7 +44,9 @@ public sealed class JobViewModel(JobRecord record) : ObservableObject
     public IReadOnlyList<DeviceStatus> Devices => Record.LatestStatus?.Devices ?? [];
     public bool HasRecovered => SessionResultsAvailable == true;
     public string RecoveryMessage => HasRecovered ? "Passwords saved by this session are available in its results." : "Results only include passwords saved by this session. Earlier recoveries stay with their original sessions.";
-    public bool CanRestore => Record.State is not (JobState.Running or JobState.Paused) && File.Exists(Record.RestorePath ?? Record.Configuration.Options.RestorePath);
+    public bool CanRestore => !IsPreparing && Record.State is not (JobState.Running or JobState.Paused) && _restoreAvailability.CanRestore;
+    public string RestoreGuidance => Record.State is JobState.Running or JobState.Paused ? "" : _restoreAvailability.Message;
+    internal void SetRestoreAvailability(RestoreAvailability availability) { _restoreAvailability = availability; Refresh(); CommandManager.InvalidateRequerySuggested(); }
     public void Refresh() => Raise("");
 }
 
@@ -61,7 +64,7 @@ public sealed class JobsViewModel : ObservableObject
     private JobViewModel? _selected;
     private readonly Stack<(JobViewModel Job, int Index)> _deleted = [];
     public ObservableCollection<JobViewModel> Jobs { get; } = [];
-    public JobViewModel? Selected { get => _selected; set { if (Set(ref _selected, value)) CommandManager.InvalidateRequerySuggested(); } }
+    public JobViewModel? Selected { get => _selected; set { if (Set(ref _selected, value)) { CommandManager.InvalidateRequerySuggested(); if (value is not null) _ = RefreshRestoreSafelyAsync(value); } } }
     public bool HasRunning => _running.Count > 0 || _preparing.Count > 0;
     public ICommand PauseCommand { get; }
     public ICommand ResumeCommand { get; }
@@ -80,6 +83,7 @@ public sealed class JobsViewModel : ObservableObject
     public JobsViewModel(AppServices services)
     {
         _services = services;
+        services.BackendChanged += () => { foreach (var job in Jobs) job.SetRestoreAvailability(new(false, "The backend changed. Select the session to recheck its checkpoint.")); if (Selected is { } selected) _ = RefreshRestoreSafelyAsync(selected); };
         ViewResultsCommand = new AsyncCommand(async _ => { if (Selected is { } job && ResultsRequested is { } open) await open(job); }, services.ReportError, _ => Selected is not null);
         DeleteCommand = new AsyncCommand(_ => DeleteSelectedAsync(), services.ReportError, _ => Selected is { } job && CanDelete(job));
         UndoDeleteCommand = new AsyncCommand(_ => UndoDeleteAsync(), services.ReportError, _ => _deleted.Count > 0);
@@ -98,7 +102,7 @@ public sealed class JobsViewModel : ObservableObject
                 await running.StopAsync();
             }
         }, services.ReportError, _ => Selected is not null && (_running.ContainsKey(Selected.Record.Id) || _preparing.ContainsKey(Selected.Record.Id)));
-        RestoreCommand = new AsyncCommand(async _ => { if (Selected is { CanRestore: true } job) await LaunchAsync(job, true); }, services.ReportError, _ => Selected?.CanRestore == true && !services.IsComputeBusy && !services.IsQueueActive);
+        RestoreCommand = new AsyncCommand(async _ => { if (Selected is { CanRestore: true } job) await LaunchAsync(job, true); }, services.ReportError, _ => Selected?.CanRestore == true && services.CanStartWork && !services.IsComputeBusy && !services.IsQueueActive);
         NextActionCommand = new RelayCommand(_ =>
         {
             if (Selected is not { } job) return;
@@ -111,6 +115,7 @@ public sealed class JobsViewModel : ObservableObject
     private bool CanDelete(JobViewModel job) => Jobs.Contains(job) && !_running.ContainsKey(job.Record.Id) && !_preparing.ContainsKey(job.Record.Id) && job.Record.State is not (JobState.Running or JobState.Paused);
     private async Task DeleteSelectedAsync()
     {
+        using var operation = _services.BeginOperation();
         if (Selected is not { } job || !CanDelete(job)) return;
         var index = Jobs.IndexOf(job);
         Jobs.Remove(job);
@@ -123,6 +128,7 @@ public sealed class JobsViewModel : ObservableObject
     }
     private async Task UndoDeleteAsync()
     {
+        using var operation = _services.BeginOperation();
         if (!_deleted.TryPop(out var deleted)) return;
         Jobs.Insert(Math.Min(deleted.Index, Jobs.Count), deleted.Job);
         Selected = deleted.Job;
@@ -163,6 +169,7 @@ public sealed class JobsViewModel : ObservableObject
     }
     public async Task StartAsync(HashcatJob configuration, bool queued = false)
     {
+        using var operation = _services.BeginOperation();
         if (_services.IsQueueActive && !queued) throw new InvalidOperationException("Pause the queue before starting a separate recovery job.");
         if (_services.IsComputeBusy) throw new InvalidOperationException("Another recovery or hardware test is running. Wait for it to finish or add this attack to the queue.");
         var output = _services.Backend.Commands.GetOutputPath(configuration);
@@ -185,6 +192,20 @@ public sealed class JobsViewModel : ObservableObject
         var launch = LaunchCoreAsync(job, restore, queued);
         _launches.RemoveAll(task => task.IsCompleted); _launches.Add(launch);
         return launch;
+    }
+    private async Task RefreshRestoreSafelyAsync(JobViewModel job)
+    {
+        try
+        {
+            using var operation = _services.BeginOperation();
+            var backend = _services.Installation;
+            var availability = backend is null ? new RestoreAvailability(false, "Configure the backend that created this checkpoint in Settings. Your saved results remain available.")
+                : await Task.Run(() => _services.Backend.GetRestoreAvailability(backend, job.Record), _services.LifetimeToken);
+            if (ReferenceEquals(backend, _services.Installation)) job.SetRestoreAvailability(availability);
+        }
+        catch (OperationCanceledException) { }
+        catch (InvalidOperationException) when (!_services.CanStartWork) { }
+        catch (Exception exception) { job.SetRestoreAvailability(new(false, "The checkpoint could not be checked. Existing results are preserved.")); _services.ReportError(exception); }
     }
     private async Task LaunchCoreAsync(JobViewModel job, bool restore, bool queued)
     {
@@ -225,7 +246,14 @@ public sealed class JobsViewModel : ObservableObject
                 _services.Notice = selection.Message;
             }
             preparation.Token.ThrowIfCancellationRequested();
-            running = restore ? _services.Backend.RestoreJob(backend, job.Record.Configuration, progress, _services.LifetimeToken) : _services.Backend.StartJob(backend, job.Record.Configuration, progress, _services.LifetimeToken);
+            if (!restore)
+            {
+                await Task.Run(() => _services.Backend.RecordProvenance(backend, job.Record), preparation.Token);
+                await SaveAsync();
+                preparation.Token.ThrowIfCancellationRequested();
+                if (!ReferenceEquals(backend, _services.Installation)) throw new HashcatException("The backend changed while saving this session. Start again with the current backend.");
+            }
+            running = restore ? _services.Backend.RestoreJob(backend, job.Record, progress, _services.LifetimeToken) : _services.Backend.StartJob(backend, job.Record.Configuration, progress, _services.LifetimeToken);
         }
         catch (Exception exception)
         {
@@ -269,6 +297,7 @@ public sealed class JobsViewModel : ObservableObject
         {
             _running.Remove(job.Record.Id); job.Record.FinishedAt = DateTimeOffset.UtcNow; job.Refresh(); Raise(nameof(HasRunning)); CommandManager.InvalidateRequerySuggested();
             await RefreshSessionResultsAsync(job);
+            await RefreshRestoreSafelyAsync(job);
             if (job.HasRecovered) _services.Notice = "Passwords recovered. On Jobs, select the session and choose View recovered passwords.";
             Exception? persistenceError = null;
             try

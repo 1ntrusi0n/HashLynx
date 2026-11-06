@@ -163,7 +163,7 @@ public sealed class RulePresetIntegrationTests
                 // transport exercises the same rule processing without relying on that handle.
                 var candidateFile = Path.Combine(Path.GetDirectoryName(wordlist)!, preset.Id + ".candidates.txt");
                 var arguments = new List<string> { "--stdout", "--quiet", "--attack-mode", "0", "--rules-file", facade.RulePresets.GetRuleFilePath(preset.Id), "--outfile", candidateFile };
-                if (deviceIds is not null) arguments.AddRange(["--backend-devices", deviceIds, "--opencl-device-types", "1,2,3"]);
+                if (deviceIds is not null) arguments.AddRange(["--backend-devices", deviceIds, "--opencl-device-types", installation.IsVersion8OrLater ? "1,2" : "1,2,3"]);
                 arguments.AddRange(["--", wordlist]);
                 var capture = await new HashcatRunner().CaptureAsync(new(installation.ExecutablePath, installation.WorkingDirectory, arguments), cancellationToken);
                 Assert.Equal(0, capture.ExitCode);

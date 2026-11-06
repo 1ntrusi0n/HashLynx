@@ -4,6 +4,29 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-06
+
+### Added
+
+- Three guided Beginner recovery choices: Wordlist, Known password pattern, and Hashcat 8 Likely passwords (PCFG). Expert mode adds PCFG constraints and remembered hints, words inside patterns, expanded rule support, and separate-list rule concatenation.
+- Optional GitHub release checks, an unchecked **Check for Updates Automatically** preference, explicit download and restart actions, package integrity checks, and a bundled first-party updater with file ownership validation and rollback. Application updates preserve the separate backend and local recovery data.
+- **Created by err0r** credit, assembly-derived application version, an offline changelog, and contextual help throughout recovery controls.
+- Windows release packaging with an application file manifest, SHA-256 checksums, and a manual workflow that prepares a draft GitHub release.
+
+### Changed
+
+- Beginner mode is the default. Hybrid, Combinator, password hints, custom rule controls, and wordlist-pattern attacks are Expert features; saved queues and job results remain accessible in Beginner. The saved startup preference is distinct from the current session's Expert toggle.
+- Hashcat 8 runtime staging includes feeds, probabilistic grammars and tables. Backend support is detected from its version and advertised capabilities, with installation-aware caches.
+- Hashcat 8 uses its automatic workload tuning; obsolete workload controls are disabled and removed options receive explanatory validation errors. Hashcat 7.1.2 retains its existing options.
+
+### Fixed
+
+- Hashcat 8 device selection no longer includes its removed accelerator device type. Legacy hash-mode aliases and new failure categories are recognized.
+- Hashcat 8 restores rebuild validated arguments from the saved job and use only a compatible checkpoint position. Backend provenance and input snapshots prevent replaying changed configurations. Older checkpoints are preserved with guidance rather than treated as successful jobs.
+- Update shutdown excludes running jobs, queues, target extraction, and asynchronous preparation; late work cannot start during the handoff. Failed settings loads cannot be overwritten by default preferences.
+
+### Earlier development changes included in this release
+
 ### Changed
 
 - Readiness checklist text now uses green for ready items, red for missing inputs or required corrections, and amber for pending analysis/device checks, with readable colors in Light, Dark and System themes.

@@ -21,7 +21,8 @@ public sealed class HashcatCommandBuilder
             [AttackFamilies.Combinator] = attack => attack.Wordlists.Select(FullPath).ToArray(),
             [AttackFamilies.Mask] = attack => [MaskArgument(attack)],
             [AttackFamilies.HybridWordlistMask] = attack => attack.Wordlists.Select(FullPath).Append(MaskArgument(attack)).ToArray(),
-            [AttackFamilies.HybridMaskWordlist] = attack => new[] { MaskArgument(attack) }.Concat(attack.Wordlists.Select(FullPath)).ToArray()
+            [AttackFamilies.HybridMaskWordlist] = attack => new[] { MaskArgument(attack) }.Concat(attack.Wordlists.Select(FullPath)).ToArray(),
+            [AttackFamilies.WordlistPattern] = attack => new[] { attack.Mask ?? "" }.Concat(attack.Wordlists.Select(FullPath)).ToArray()
         };
         if (additionalAttacks is not null)
             foreach (var adapter in additionalAttacks) _attackAdapters[adapter.Kind] = adapter.BuildInputs;
@@ -32,10 +33,10 @@ public sealed class HashcatCommandBuilder
     public string GetOutputPath(HashcatJob job) => FullPath(job.Options.OutputPath ?? Path.Combine(GetJobDirectory(job), "recovered.txt"));
     public string GetJobDirectory(HashcatJob job) => Path.Combine(_stateDirectory, job.Id.ToString("N"));
 
-    public IReadOnlyList<string> ResolveRuleFiles(AttackConfiguration attack)
+    public IReadOnlyList<string> ResolveRuleFiles(AttackConfiguration attack, bool expandedRules = false)
     {
         if (attack.RulePresetId is null) return attack.RuleFiles;
-        if (attack.Kind != AttackFamilies.Dictionary) throw new ArgumentException("Built-in rule presets are available for dictionary attacks.");
+        if (!HashcatAttackValidation.SupportsRules(attack.Kind, expandedRules)) throw new ArgumentException("This backend supports built-in rule presets only with dictionary attacks.");
         if (attack.RuleFiles.Count > 0) throw new ArgumentException("Choose a built-in preset or custom rule files. Combining them multiplies rule applications.");
         return [RulePresets.GetRuleFilePath(attack.RulePresetId)];
     }
@@ -58,6 +59,8 @@ public sealed class HashcatCommandBuilder
 
     public HashcatCommand Build(HashcatInstallation installation, HashcatJob job)
     {
+        var specialErrors = HashcatAttackValidation.CheckSpecialAttack(job.Attack);
+        if (specialErrors.Count > 0) throw new ArgumentException(string.Join(Environment.NewLine, specialErrors));
         if (job.Attack.MaskPresetId is not null) ValidateMaskPreset(job.Attack);
         if (!installation.Capabilities.AttackModes.TryGetValue(job.Attack.Kind, out var attackId))
             throw new ArgumentException("The installed Hashcat release does not expose this attack family.");
@@ -66,7 +69,7 @@ public sealed class HashcatCommandBuilder
         Option("--hash-type", job.HashMode);
         Option("--attack-mode", attackId);
         Option("--session", job.Options.SessionName);
-        Option("--workload-profile", job.Options.WorkloadProfile);
+        if (!installation.IsVersion8OrLater && installation.Capabilities.WorkloadProfilesEffective) Option("--workload-profile", job.Options.WorkloadProfile);
         Option("--outfile", GetOutputPath(job));
         Option("--outfile-format", "1,3");
         args.Add("--quiet");
@@ -81,11 +84,19 @@ public sealed class HashcatCommandBuilder
         {
             Option("--backend-devices", string.Join(',', job.Options.Devices));
             // Hashcat independently filters IDs and OpenCL device types. Explicit IDs should remain eligible even when they select a CPU.
-            Option("--opencl-device-types", "1,2,3");
+            Option("--opencl-device-types", installation.IsVersion8OrLater ? "1,2" : "1,2,3");
         }
         if (job.Options.OptimizedKernel) args.Add("--optimized-kernel-enable");
         if (job.Options.TemperatureAbort is { } temperature) Option("--hwmon-temp-abort", temperature);
-        foreach (var rule in ResolveRuleFiles(job.Attack)) Option("--rules-file", FullPath(rule));
+        var ruleFiles = ResolveRuleFiles(job.Attack, installation.Capabilities.ExpandedRules);
+        if (ruleFiles.Count > 0 && !HashcatAttackValidation.SupportsRules(job.Attack.Kind, installation.Capabilities.ExpandedRules))
+            throw new ArgumentException("The installed backend does not support rule files for this attack.");
+        foreach (var rule in ruleFiles) Option("--rules-file", FullPath(rule));
+        if (job.Attack.RulesConcatenated && !job.Options.ExtraArguments.Contains("--rules-concat"))
+        {
+            if (!installation.Capabilities.RulesConcatenation) throw new ArgumentException("This backend does not support joining rule lists. Hashcat 8 is required.");
+            args.Add("--rules-concat");
+        }
         if (!string.IsNullOrEmpty(job.Attack.LeftRule)) Option("--rule-left", job.Attack.LeftRule);
         if (!string.IsNullOrEmpty(job.Attack.RightRule)) Option("--rule-right", job.Attack.RightRule);
         foreach (var charset in job.Attack.CustomCharsets.OrderBy(c => c.Key)) Option($"--custom-charset{charset.Key}", charset.Value);
@@ -100,18 +111,50 @@ public sealed class HashcatCommandBuilder
             args.Add("--loopback");
             Option("--induction-dir", Path.Combine(GetJobDirectory(job), "induction"));
         }
-        var extraErrors = ExpertArguments.Validate(job.Options.ExtraArguments);
+        var extraErrors = ExpertArguments.Validate(job.Options.ExtraArguments, installation);
         if (extraErrors.Count > 0) throw new ArgumentException(string.Join(Environment.NewLine, extraErrors));
         args.AddRange(job.Options.ExtraArguments);
         args.Add("--");
         args.Add(FullPath(job.TargetPath));
-        if (!_attackAdapters.TryGetValue(job.Attack.Kind, out var buildInputs)) throw new ArgumentException("No positional-argument adapter is registered for this attack family.");
-        args.AddRange(buildInputs(job.Attack));
+        if (job.Attack.Kind == AttackFamilies.Pcfg) args.AddRange(PcfgArguments(installation, job.Attack));
+        else
+        {
+            if (!_attackAdapters.TryGetValue(job.Attack.Kind, out var buildInputs)) throw new ArgumentException("No positional-argument adapter is registered for this attack family.");
+            args.AddRange(buildInputs(job.Attack));
+        }
         return new(installation.ExecutablePath, installation.WorkingDirectory, args.AsReadOnly());
     }
 
-    public HashcatCommand BuildRestore(HashcatInstallation installation, HashcatJob job) => new(installation.ExecutablePath, installation.WorkingDirectory,
-        ["--session", job.Options.SessionName, "--restore-file-path", GetRestorePath(job), "--restore"]);
+    public HashcatCommand BuildRestore(HashcatInstallation installation, HashcatJob job)
+    {
+        if (!installation.IsVersion8OrLater) return new(installation.ExecutablePath, installation.WorkingDirectory,
+            ["--session", job.Options.SessionName, "--restore-file-path", GetRestorePath(job), "--restore"]);
+        if (!installation.Capabilities.RestorePosition) throw new ArgumentException("The installed backend does not expose safe position-based restore.");
+        var command = Build(installation, job);
+        var arguments = command.Arguments.ToList();
+        arguments.Insert(arguments.IndexOf("--"), "--restore-position");
+        return command with { Arguments = arguments.AsReadOnly() };
+    }
+
+    public static void SynchronizeCompatibilityOptions(HashcatJob job)
+    {
+        job.Options.ExtraArguments.RemoveAll(value => value == "--rules-concat");
+        if (job.Attack.RulesConcatenated) job.Options.ExtraArguments.Add("--rules-concat");
+    }
+
+    public string GetPcfgRulesetPath(HashcatInstallation installation, AttackConfiguration attack) =>
+        Path.Combine(installation.WorkingDirectory, "pcfg", attack.Pcfg?.UseHints == true ? "hints.tar.xz" : "default-passwords.tar.xz");
+
+    private IReadOnlyList<string> PcfgArguments(HashcatInstallation installation, AttackConfiguration attack)
+    {
+        var pcfg = attack.Pcfg ?? new();
+        var values = new List<string> { GetPcfgRulesetPath(installation, attack) };
+        if (pcfg.UseHints) values.Add("hintfile=" + FullPath(pcfg.HintFile!));
+        if (pcfg.MinimumLength is { } minimum) values.Add("pwmin=" + minimum.ToString(CultureInfo.InvariantCulture));
+        if (pcfg.MaximumLength is { } maximum) values.Add("pwmax=" + maximum.ToString(CultureInfo.InvariantCulture));
+        if (!string.IsNullOrWhiteSpace(pcfg.ShapeMask)) values.Add("mask=" + pcfg.ShapeMask);
+        return values;
+    }
 
     public HashcatCommand BuildShow(HashcatInstallation installation, HashcatJob job)
     {
@@ -157,7 +200,7 @@ public static class ExpertArguments
     // An explicit extension surface prevents aliases and attached short-option values from overriding managed settings.
     private static readonly HashSet<string> Flags = ["--hex-charset", "--hex-salt", "--hex-wordlist", "--username", "--dynamic-x", "--markov-disable", "--markov-classic", "--markov-inverse", "--slow-candidates", "--keep-guessing", "--wordlist-autohex-disable"];
     private static readonly HashSet<string> Values = ["--runtime", "--skip", "--limit", "--encoding-from", "--encoding-to", "--markov-threshold", "--segment-size", "--scrypt-tmto", "--nonce-error-corrections"];
-    public static IReadOnlyList<string> Validate(IReadOnlyList<string> arguments)
+    public static IReadOnlyList<string> Validate(IReadOnlyList<string> arguments, HashcatInstallation? installation = null)
     {
         var errors = new List<string>();
         for (var index = 0; index < arguments.Count; index++)
@@ -165,6 +208,9 @@ public static class ExpertArguments
             var arg = arguments[index];
             var equal = arg.IndexOf('=');
             var key = equal >= 0 ? arg[..equal] : arg;
+            if (key == "--rules-concat" && equal < 0 && installation?.Capabilities.RulesConcatenation == true) continue;
+            if (key == "--segment-size" && installation?.IsVersion8OrLater == true)
+                errors.Add("Hashcat 8 removed --segment-size. Remove this advanced option; wordlist seeking is managed automatically.");
             if (Flags.Contains(key) && equal < 0) continue;
             if (Values.Contains(key))
             {

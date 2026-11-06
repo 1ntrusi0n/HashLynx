@@ -73,6 +73,7 @@ public sealed class WordlistLibraryViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
+        using var workspaceOperation = _services.BeginOperation();
         try
         {
             var library = await _services.Store.LoadWordlistLibraryAsync(_services.LifetimeToken);
@@ -89,6 +90,7 @@ public sealed class WordlistLibraryViewModel : ObservableObject
 
     public async Task RememberAsync(IEnumerable<string> paths)
     {
+        using var workspaceOperation = _services.BeginOperation();
         var available = paths.Where(File.Exists).Select(System.IO.Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         if (available.Length == 0) return;
         await _gate.WaitAsync(_services.LifetimeToken);
@@ -109,6 +111,7 @@ public sealed class WordlistLibraryViewModel : ObservableObject
 
     public async Task ForgetAsync(string path)
     {
+        using var workspaceOperation = _services.BeginOperation();
         await _gate.WaitAsync(_services.LifetimeToken);
         try
         {
@@ -126,6 +129,7 @@ public sealed class WordlistLibraryViewModel : ObservableObject
 
     private async Task RenameAsync()
     {
+        using var workspaceOperation = _services.BeginOperation();
         var item = Selected;
         if (item is null) return;
         var name = FriendlyName.Trim();
@@ -136,6 +140,7 @@ public sealed class WordlistLibraryViewModel : ObservableObject
 
     private async Task RepairAsync()
     {
+        using var workspaceOperation = _services.BeginOperation();
         var item = Selected;
         if (item is null) return;
         var path = _services.Dialogs.OpenFiles("Locate this wordlist at its new location").FirstOrDefault();
@@ -168,6 +173,7 @@ public sealed class WordlistLibraryViewModel : ObservableObject
 
     public async Task RefreshAsync()
     {
+        using var workspaceOperation = _services.BeginOperation();
         await _gate.WaitAsync(_services.LifetimeToken);
         var originalEntries = Entries.Select(row => row.Entry).ToArray();
         var metadataSaved = false;
@@ -214,6 +220,7 @@ public sealed class WordlistLibraryViewModel : ObservableObject
 
     private async Task TransformAsync()
     {
+        using var workspaceOperation = _services.BeginOperation();
         if (!int.TryParse(MinimumLength, out var minimum) || !int.TryParse(MaximumLength, out var maximum))
             throw new InvalidOperationException("Enter whole numbers for the minimum and maximum byte length.");
         var inputs = Entries.Where(row => row.Include).Select(row => row.Path).ToArray();

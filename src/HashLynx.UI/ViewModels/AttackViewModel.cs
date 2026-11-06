@@ -34,21 +34,21 @@ public sealed partial class AttackViewModel : ObservableObject
     public InspectorViewModel Inspector { get; }
     public ObservableCollection<string> Wordlists { get; } = [];
     public ObservableCollection<string> Rules { get; } = [];
-    public int Family { get => _family; set { if (Set(ref _family, value)) { Raise(nameof(UsesWordlists)); Raise(nameof(UsesMask)); Raise(nameof(IsHybrid)); Raise(nameof(IsCombinator)); Raise(nameof(IsDictionary)); Raise(nameof(UsesSingleRules)); RaiseRuleVisibility(); RaiseMaskVisibility(); } } }
+    public int Family { get => _family; set { var selected = value is >= 0 and <= 5 && (Expert || value is 0 or 1 or 4) && (value != 4 || ShowPcfgMethod) && (value != 5 || ShowWordlistPatternMethod) ? value : 0; if (Set(ref _family, selected)) RaiseFamilyVisibility(); } }
     public bool IsDictionary => Family == 0;
-    public bool UsesSingleRules => Expert && Family != 1;
-    public bool UsesWordlists => Family is 0 or 2;
+    public bool UsesSingleRules => Expert && Family is 0 or 2 or 3;
+    public bool UsesWordlists => Family is 0 or 2 or 5;
     public bool UsesMask => Family is 1 or 2;
     public bool IsHybrid => Family == 2;
     public bool IsCombinator => Family == 3;
     public int HybridDirection { get => _hybridDirection; set => Set(ref _hybridDirection, value); }
-    public bool Expert { get => _expert; set { if (Set(ref _expert, value)) { RaiseRuleVisibility(); Raise(nameof(UsesSingleRules)); Raise(nameof(WordlistButtonLabel)); Raise(nameof(BasicMode)); Raise(nameof(RecoveryDeviceSummary)); if (!value) StartFeedback = "Basic mode uses the selected preset and saved recovery device. Expert custom options apply only in Expert mode."; } } }
+    public bool Expert { get => _expert; set { if (Set(ref _expert, value)) { if (!value && Family is 2 or 3 or 5) Family = 0; RaiseFamilyVisibility(); Raise(nameof(WordlistButtonLabel)); Raise(nameof(BasicMode)); Raise(nameof(RecoveryDeviceSummary)); if (!value) StartFeedback = "Beginner mode uses your visible choices and saved recovery device. Advanced draft values are kept for Expert mode."; CommandManager.InvalidateRequerySuggested(); } } }
     public bool BasicMode => !Expert;
     public IReadOnlyList<RulePresetChoice> RulePresets { get; }
     public RulePresetChoice SelectedRulePreset { get => _selectedRulePreset; set { if (value is not null && Set(ref _selectedRulePreset, value)) { Raise(nameof(PresetSummary)); Raise(nameof(PresetEffort)); } } }
     public bool UseCustomRules { get => _useCustomRules; set { if (Set(ref _useCustomRules, value)) RaiseRuleVisibility(); } }
-    public bool ShowPresets => IsDictionary && !(Expert && UseCustomRules);
-    public bool ShowCustomRuleChoice => IsDictionary && Expert;
+    public bool ShowPresets => RulesAvailable && !(Expert && UseCustomRules);
+    public bool ShowCustomRuleChoice => RulesAvailable && Expert;
     public bool ShowCustomRules => ShowCustomRuleChoice && UseCustomRules;
     public bool RulesHelpVisible { get => _rulesHelpVisible; set => Set(ref _rulesHelpVisible, value); }
     public string PresetSummary => SelectedRulePreset.Description;
@@ -134,6 +134,7 @@ public sealed partial class AttackViewModel : ObservableObject
     {
         _services = services; _jobs = jobs; _showJobs = showJobs; Inspector = new(services);
         services.DefaultDevicesChanged += () => Raise(nameof(RecoveryDeviceSummary));
+        services.BackendChanged += () => { if (IsPcfg && !ShowPcfgMethod || IsWordlistPattern && !ShowWordlistPatternMethod) Family = 0; RaiseFamilyVisibility(); };
         _bundledWordlists = new BundledWordlists(services.Store.Paths);
         _rulePresets = new RulePresetCatalog(Path.Combine(services.Store.Paths.Root, "rule-presets"));
         RulePresets = [new(null, "No Rules", "Try the words exactly as they appear in your wordlist.", "One candidate per input word, with no rule transformations."),
@@ -152,13 +153,13 @@ public sealed partial class AttackViewModel : ObservableObject
         BrowseLeftCommand = new AsyncCommand(_ => BrowseCombinatorWordlistAsync(true), services.ReportError);
         BrowseRightCommand = new AsyncCommand(_ => BrowseCombinatorWordlistAsync(false), services.ReportError);
         BrowseOutputCommand = new RelayCommand(_ => { if (services.Dialogs.SaveFile("Results output", "recovered.txt") is { } path) { OutputPath = path; Raise(nameof(OutputPath)); } });
-        PreflightCommand = new AsyncCommand(async _ => { await PrepareAsync(); }, ReportAttackError);
+        PreflightCommand = new AsyncCommand(async _ => { await PrepareAsync(); }, ReportAttackError, _ => Expert && services.CanStartWork);
         StartCommand = new AsyncCommand(async _ =>
         {
             var job = await PrepareAsync(); if (job is null) return;
             try { var launch = jobs.StartAsync(job); _showJobs(); await launch; }
             finally { if (jobs.Jobs.Any(item => item.Record.Id == job.Id)) ResetDraft(); }
-        }, ReportAttackError, _ => !services.IsComputeBusy && !services.IsQueueActive);
+        }, ReportAttackError, _ => services.CanStartWork && !services.IsComputeBusy && !services.IsQueueActive);
         CopyCommand = new RelayCommand(_ => services.Dialogs.Copy(Preview));
         ToggleRulesHelpCommand = new RelayCommand(_ => RulesHelpVisible = !RulesHelpVisible);
         UseStarterCommand = new AsyncCommand(_ => UseStarterAsync(), services.ReportError);
@@ -171,7 +172,7 @@ public sealed partial class AttackViewModel : ObservableObject
         if (Wordlists.Count == 0) await UseStarterAsync();
         await Inspector.LoadCatalogAsync();
     }
-    private void RaiseRuleVisibility() { Raise(nameof(ShowPresets)); Raise(nameof(ShowCustomRuleChoice)); Raise(nameof(ShowCustomRules)); }
+    private void RaiseRuleVisibility() { Raise(nameof(RulesAvailable)); Raise(nameof(ShowPresets)); Raise(nameof(ShowCustomRuleChoice)); Raise(nameof(ShowCustomRules)); Raise(nameof(CanConcatenateRules)); }
     private void ReportAttackError(Exception exception) { if (exception is not OperationCanceledException) StartFeedback = exception.Message; _services.ReportError(exception); }
     private async Task UseStarterAsync()
     {
@@ -193,11 +194,12 @@ public sealed partial class AttackViewModel : ObservableObject
     private void MoveWordlist(int delta) { var index = SelectedWordlist is null ? -1 : Wordlists.IndexOf(SelectedWordlist); if (index >= 0 && index + delta >= 0 && index + delta < Wordlists.Count) Wordlists.Move(index, index + delta); }
     private HashcatJob BuildDraft(string targetPath)
     {
-        var kinds = new[] { AttackFamilies.Dictionary, AttackFamilies.Mask, HybridDirection == 0 ? AttackFamilies.HybridWordlistMask : AttackFamilies.HybridMaskWordlist, AttackFamilies.Combinator };
-        var charsets = UsesCustomMaskOptions ? new[] { Charset1, Charset2, Charset3, Charset4 }.Select((text, index) => (text, index)).Where(item => !string.IsNullOrEmpty(item.text)).ToDictionary(item => item.index + 1, item => item.text) : [];
+        if (Family is < 0 or > 5 || (!Expert && Family is 2 or 3 or 5)) throw new InvalidOperationException("Choose one of the visible recovery methods.");
+        var kinds = new[] { AttackFamilies.Dictionary, AttackFamilies.Mask, HybridDirection == 0 ? AttackFamilies.HybridWordlistMask : AttackFamilies.HybridMaskWordlist, AttackFamilies.Combinator, AttackFamilies.Pcfg, AttackFamilies.WordlistPattern };
+        var charsets = UsesCustomMaskOptions || IsWordlistPattern ? new[] { Charset1, Charset2, Charset3, Charset4 }.Select((text, index) => (text, index)).Where(item => !string.IsNullOrEmpty(item.text)).ToDictionary(item => item.index + 1, item => item.text) : [];
         var directory = _services.Store.Paths.GetJobDirectory(_draftId.ToString("N"));
         var session = Expert ? Session : "hashlynx-" + _draftId.ToString("N")[..10];
-        return new HashcatJob
+        var job = new HashcatJob
         {
             Id = _draftId, Name = session, TargetPath = targetPath, HashMode = Inspector.SelectedMode?.Mode ?? -1,
             Attack = new()
@@ -206,7 +208,7 @@ public sealed partial class AttackViewModel : ObservableObject
                 Wordlists = IsCombinator ? [LeftWordlist, RightWordlist] : UsesWordlists ? Wordlists.ToList() : [],
                 RulePresetId = ShowPresets ? SelectedRulePreset.Id : null,
                 RuleFiles = ShowCustomRules ? Rules.ToList() : [],
-                Mask = EffectiveMask,
+                Mask = IsWordlistPattern ? WordlistPattern : EffectiveMask,
                 MaskFile = EffectiveMaskFile,
                 MaskPresetId = EffectiveMaskPresetId,
                 CustomCharsets = charsets,
@@ -215,10 +217,14 @@ public sealed partial class AttackViewModel : ObservableObject
                 IncrementMaximum = IncrementMaximum,
                 LeftRule = UsesSingleRules ? LeftRule : null,
                 RightRule = UsesSingleRules ? RightRule : null,
-                Loopback = Expert && IsDictionary && Loopback
+                Loopback = Expert && IsDictionary && Loopback,
+                RulesConcatenated = Expert && ShowCustomRules && RulesConcatenated,
+                Pcfg = IsPcfg ? BuildPcfgConfiguration() : null
             },
             Options = BuildCommonOptions(directory, session)
         };
+        HashcatCommandBuilder.SynchronizeCompatibilityOptions(job);
+        return job;
     }
     private CommonOptions BuildCommonOptions(string directory, string session)
     {
@@ -246,11 +252,24 @@ public sealed partial class AttackViewModel : ObservableObject
     }
     private async Task<HashcatJob?> PrepareAsync(AttackConfiguration? attackOverride = null, CancellationToken cancellationToken = default)
     {
+        using var operation = _services.BeginOperation();
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_services.LifetimeToken, cancellationToken);
         var token = cancellation.Token;
         Inspector.ValidationMessage = ""; AttackErrors = ""; CommonErrors = "";
         StartFeedback = "Checking the target and attack settings…";
         var backend = _services.RequireBackend();
+        var preparationDraft = JsonSerializer.Serialize(BuildDraft(""));
+        if (attackOverride is null && IsPcfg && Expert && PcfgUseHints && !File.Exists(_preparedPcfgHintFile))
+        {
+            var words = PcfgHintWords;
+            var file = await HashcatPcfgHints.WriteAsync(_services.Store.Paths.Root, words, token);
+            if (preparationDraft != JsonSerializer.Serialize(BuildDraft("")) || words != PcfgHintWords)
+            {
+                File.Delete(file);
+                throw new InvalidOperationException("The attack changed while preparing its hints. Start again to use the current choices.");
+            }
+            _preparedPcfgHintFile = file;
+        }
         var targetRevision = Inspector.TargetRevision;
         string target;
         try { target = await Inspector.PrepareTargetAsync(token); }
@@ -260,10 +279,11 @@ public sealed partial class AttackViewModel : ObservableObject
         var job = BuildDraft(target);
         var originalDraftSnapshot = JsonSerializer.Serialize(job);
         if (attackOverride is not null) job.Attack = CloneAttack(attackOverride);
+        HashcatCommandBuilder.SynchronizeCompatibilityOptions(job);
         var configurationSnapshot = JsonSerializer.Serialize(job);
         var validation = await Task.Run(() => _services.Backend.ValidateJob(backend, job), token);
         var targetFields = new[] { "Hashcat executable", "Target", "Hash mode" };
-        var attackFields = new[] { "Attack", "Wordlists", "Wordlist", "Rule file", "Rules", "Mask", "Mask file", "Mask preset", "Increment", "Charset", "Loopback" };
+        var attackFields = new[] { "Attack", "Wordlists", "Wordlist", "Rule file", "Rules", "Mask", "Mask file", "Mask preset", "Increment", "Charset", "Loopback", "PCFG", "PCFG hints", "PCFG length", "PCFG shape" };
         Inspector.ValidationMessage = string.Join(Environment.NewLine, validation.Errors.Where(item => targetFields.Contains(item.Field)).Select(item => item.Message));
         AttackErrors = string.Join(Environment.NewLine, validation.Errors.Where(item => attackFields.Contains(item.Field)).Select(item => item.Message));
         CommonErrors = string.Join(Environment.NewLine, validation.Errors.Where(item => !targetFields.Contains(item.Field) && !attackFields.Contains(item.Field)).Select(item => item.Message));
@@ -277,6 +297,7 @@ public sealed partial class AttackViewModel : ObservableObject
         }
         var currentDraft = BuildDraft(target);
         if (attackOverride is not null) currentDraft.Attack = CloneAttack(attackOverride);
+        HashcatCommandBuilder.SynchronizeCompatibilityOptions(currentDraft);
         if (!ReferenceEquals(backend, _services.Installation) || targetRevision != Inspector.TargetRevision || target != Inspector.PreparedTargetPath || originalDraftSnapshot != JsonSerializer.Serialize(BuildDraft(target)) || configurationSnapshot != JsonSerializer.Serialize(currentDraft)) throw new InvalidOperationException("The target, backend, or attack settings changed during the checks. Start again to use the current configuration.");
         Preview = _services.Backend.BuildCommand(backend, job).Preview;
         Preflight = "Ready to start. Target, attack inputs, session and output paths passed preflight." + (Preflight.Length == 0 ? "" : Environment.NewLine + Preflight);

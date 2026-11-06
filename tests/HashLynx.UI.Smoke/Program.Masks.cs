@@ -74,6 +74,7 @@ internal sealed partial class SmokeApplication
         Require(attack.EffectiveMask is null && attack.EffectiveMaskPresetId is null, "An empty external file choice must remain invalid instead of selecting another mask source.");
 
         attack.Family = 1; attack.SelectedMaskSource = MaskSourceChoice.BuiltIn;
+        attack.Expert = true;
         attack.Family = 2; attack.HybridDirection = 0;
         Require(attack.SelectedMaskSource == MaskSourceChoice.Text && attack.MaskSources.All(source => source.Kind != MaskInputKind.BuiltIn)
             && attack.EffectiveMaskPresetId is null, "Hybrid must use its own custom source and exclude the complete-password preset.");
@@ -85,6 +86,7 @@ internal sealed partial class SmokeApplication
         Require(attack.IsBuiltInMask, "Returning from Hybrid must preserve the pure Mask source choice.");
 
         attack.Family = 0;
+        attack.Expert = false;
         attack.Mask = "?u?l?l?l?l?l?d?d"; attack.MaskFile = "";
         await ((AsyncCommand)attack.UseStarterCommand).ExecuteAsync();
         window.Width = 1380; window.Height = 920; scroll.ScrollToTop();

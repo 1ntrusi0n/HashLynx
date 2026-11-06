@@ -10,8 +10,15 @@ public sealed class AppSettings
     public List<int> DefaultDeviceIds { get; set; } = [];
     public bool ExpertMode { get; set; }
     public bool CompletionNotifications { get; set; }
+    public bool CheckForUpdatesAutomatically { get; set; }
     public int StatusIntervalSeconds { get; set; } = 2;
     public Dictionary<string, ExtractorToolSettings> ExtractorTools { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}
+
+public sealed class UpdateCheckState
+{
+    public int SchemaVersion { get; set; } = 1;
+    public DateTimeOffset? LastAttemptUtc { get; set; }
 }
 
 public sealed class ExtractorToolSettings

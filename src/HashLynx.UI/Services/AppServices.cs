@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.IO;
 using Microsoft.Win32;
+using HashLynx.Updates;
 
 namespace HashLynx.UI.Services;
 
@@ -25,16 +26,90 @@ public sealed class AppServices : ObservableObject
     public IBitLockerDriveService BitLockerDrives { get; }
     public StructuredLog Log { get; }
     public AppSettings Settings { get; private set; } = new();
+    public bool SettingsLoaded { get; private set; }
+    public IApplicationUpdateService Updates { get; }
+    private readonly object _operationGate = new();
+    private readonly SemaphoreSlim _settingsGate = new(1, 1);
+    private int _workspaceOperations;
+    private bool _updatePending;
+    private bool _queueActive;
+    public bool IsUpdatePending { get { lock (_operationGate) return _updatePending; } }
+    public bool CanStartWork => !IsUpdatePending && !LifetimeToken.IsCancellationRequested;
+    public bool IsBusyForUpdate { get { lock (_operationGate) return _computeBusy || _queueActive || _workspaceOperations != 0; } }
     private bool _computeBusy;
-    public bool IsComputeBusy => _computeBusy;
-    public bool IsQueueActive { get; set; }
-    public bool TryBeginComputeOperation()
+    public bool IsComputeBusy { get { lock (_operationGate) return _computeBusy; } }
+    public bool IsQueueActive
     {
-        if (_computeBusy || LifetimeToken.IsCancellationRequested) return false;
-        _computeBusy = true; Raise(nameof(IsComputeBusy)); System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+        get { lock (_operationGate) return _queueActive; }
+        set
+        {
+            lock (_operationGate)
+            {
+                if (value && (_updatePending || LifetimeToken.IsCancellationRequested)) throw new OperationCanceledException("HashLynx is preparing to close.");
+                _queueActive = value;
+            }
+            RaiseOperationState();
+        }
+    }
+    public IDisposable BeginOperation()
+    {
+        lock (_operationGate)
+        {
+            if (_updatePending || LifetimeToken.IsCancellationRequested) throw new OperationCanceledException("HashLynx is preparing to close.");
+            _workspaceOperations++;
+        }
+        RaiseOperationState();
+        return new OperationLease(this);
+    }
+    private sealed class OperationLease(AppServices owner) : IDisposable
+    {
+        private AppServices? _owner = owner;
+        public void Dispose()
+        {
+            var current = Interlocked.Exchange(ref _owner, null);
+            if (current is null) return;
+            lock (current._operationGate) current._workspaceOperations--;
+            current.RaiseOperationState();
+        }
+    }
+    public bool TryBeginUpdate()
+    {
+        lock (_operationGate)
+        {
+            if (_updatePending || _computeBusy || _queueActive || _workspaceOperations != 0 || LifetimeToken.IsCancellationRequested) return false;
+            _updatePending = true;
+        }
+        RaiseOperationState();
         return true;
     }
-    public void EndComputeOperation() { _computeBusy = false; Raise(nameof(IsComputeBusy)); System.Windows.Input.CommandManager.InvalidateRequerySuggested(); }
+    public void CancelUpdatePreparation()
+    {
+        lock (_operationGate) _updatePending = false;
+        RaiseOperationState();
+    }
+    private void RaiseOperationState()
+    {
+        void Refresh()
+        {
+            Raise(nameof(IsComputeBusy)); Raise(nameof(IsQueueActive)); Raise(nameof(IsBusyForUpdate));
+            Raise(nameof(IsUpdatePending)); Raise(nameof(CanStartWork));
+            System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+        }
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is not null && !dispatcher.CheckAccess()) dispatcher.BeginInvoke(Refresh);
+        else Refresh();
+    }
+    public bool TryBeginComputeOperation()
+    {
+        lock (_operationGate)
+        {
+            if (_computeBusy || _updatePending || LifetimeToken.IsCancellationRequested) return false;
+            _computeBusy = true;
+        }
+        RaiseOperationState();
+        return true;
+    }
+    public void EndComputeOperation() { lock (_operationGate) _computeBusy = false; RaiseOperationState(); }
     public HashcatInstallation? Installation { get => _installation; private set { Set(ref _installation, value); Raise(nameof(BackendLabel)); } }
     public string BackendLabel => Installation is null ? "Backend not configured" : $"Hashcat {Installation.Version} · local";
     public string Notice { get => _notice; set => Set(ref _notice, value); }
@@ -45,21 +120,33 @@ public sealed class AppServices : ObservableObject
     public string DefaultDeviceSummary => Settings.DefaultDeviceIds.Count == 0
         ? "Checked automatic selection (finds a working device before recovery)"
         : "Device " + string.Join(", ", Settings.DefaultDeviceIds);
+    public async Task UpdateSettingsAsync(Action<AppSettings> update)
+    {
+        using var operation = BeginOperation();
+        await _settingsGate.WaitAsync(LifetimeToken);
+        try
+        {
+            var copy = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(Settings))!;
+            update(copy);
+            await Store.SaveSettingsAsync(copy, LifetimeToken);
+            Settings = copy;
+        }
+        finally { _settingsGate.Release(); }
+    }
     public async Task SetDefaultDevicesAsync(IEnumerable<int> deviceIds)
     {
+        using var operation = BeginOperation();
         var selected = deviceIds.Distinct().ToList();
         if (selected.Any(id => id <= 0)) throw new InvalidOperationException("Choose a device reported in Hardware.");
-        var previous = Settings.DefaultDeviceIds;
-        Settings.DefaultDeviceIds = selected;
-        try { await Store.SaveSettingsAsync(Settings, LifetimeToken); }
-        catch { Settings.DefaultDeviceIds = previous; throw; }
+        await UpdateSettingsAsync(settings => settings.DefaultDeviceIds = selected);
         DeviceSelection.Invalidate();
         DefaultDevicesChanged?.Invoke();
         Notice = $"Recovery default saved: {DefaultDeviceSummary}. Applies to new attacks, including Basic mode.";
     }
-    public AppServices(PersistenceStore? store = null, HashcatFacade? backend = null, IBitLockerDriveService? bitLockerDrives = null, HashcatDeviceSelectionService? deviceSelection = null)
+    public AppServices(PersistenceStore? store = null, HashcatFacade? backend = null, IBitLockerDriveService? bitLockerDrives = null, HashcatDeviceSelectionService? deviceSelection = null, IApplicationUpdateService? updates = null)
     {
         Store = store ?? new PersistenceStore();
+        Updates = updates ?? new GitHubApplicationUpdateService();
         BitLockerDrives = bitLockerDrives ?? new DriveReaderClient();
         Backend = backend ?? new HashcatFacade(Store.Paths.CacheDirectory);
         DeviceSelection = deviceSelection ?? new HashcatDeviceSelectionService(Store.Paths.CacheDirectory,
@@ -71,6 +158,7 @@ public sealed class AppServices : ObservableObject
     public async Task InitializeAsync()
     {
         Settings = await Store.LoadSettingsAsync();
+        SettingsLoaded = true;
         DefaultDevicesChanged?.Invoke();
         ApplyTheme(Settings.Theme);
         var path = Backend.Discover(Settings.HashcatDirectory);
@@ -80,6 +168,7 @@ public sealed class AppServices : ObservableObject
     }
     public async Task ConnectAsync(string executable)
     {
+        using var operation = BeginOperation();
         Notice = "Preparing and validating the local backend. The first run may take a moment…";
         Installation = await Backend.ProbeAsync(executable, LifetimeToken);
         DeviceSelection.Invalidate();

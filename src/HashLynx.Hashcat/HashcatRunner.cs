@@ -67,8 +67,8 @@ public sealed class HashcatRunner
         return (result.ToString(), truncated);
     }
 
-    public HashcatRunningJob Start(HashcatCommand command, IProgress<HashcatEvent>? progress = null, CancellationToken cancellationToken = default, bool interactiveControls = false)
-        => new(command, progress, cancellationToken, interactiveControls);
+    public HashcatRunningJob Start(HashcatCommand command, IProgress<HashcatEvent>? progress = null, CancellationToken cancellationToken = default, bool interactiveControls = false, string? backendVersion = null)
+        => new(command, progress, cancellationToken, interactiveControls, backendVersion);
 
     internal static void TryKill(Process process)
     {
@@ -84,17 +84,19 @@ public sealed class HashcatRunningJob
     private readonly CancellationTokenSource _stop = new();
     private readonly CancellationTokenSource _linked;
     private readonly bool _interactiveControls;
+    private readonly string? _backendVersion;
     private readonly IProgress<HashcatEvent>? _progress;
     private readonly object _lifecycle = new();
     private bool _disposed;
     public Task<HashcatRunResult> Completion { get; }
     public bool CanSendInteractiveControls => _interactiveControls;
 
-    internal HashcatRunningJob(HashcatCommand command, IProgress<HashcatEvent>? progress, CancellationToken cancellationToken, bool interactiveControls)
+    internal HashcatRunningJob(HashcatCommand command, IProgress<HashcatEvent>? progress, CancellationToken cancellationToken, bool interactiveControls, string? backendVersion)
     {
         cancellationToken.ThrowIfCancellationRequested();
         _progress = progress;
         _interactiveControls = interactiveControls;
+        _backendVersion = backendVersion;
         _linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stop.Token);
         _process = new Process { StartInfo = HashcatRunner.CreateStartInfo(command, true) };
         try
@@ -138,14 +140,9 @@ public sealed class HashcatRunningJob
             await Task.WhenAll(output, errors).ConfigureAwait(false);
             var cancelled = _linked.IsCancellationRequested;
             var exit = _process.ExitCode;
-            var state = cancelled ? JobState.Cancelled : exit switch { 0 => JobState.Cracked, 1 => JobState.Exhausted, 2 => JobState.Cancelled, 3 => JobState.Checkpointed, 4 => JobState.Interrupted, _ => JobState.Failed };
-            var diagnostic = cancelled ? "Stopped by request. Resume is available if Hashcat saved a restore file." : exit switch
-            {
-                0 => "Hashcat completed successfully; recovered results can be refreshed.",
-                1 => "Candidate space exhausted.", 2 => "Hashcat aborted the job.", 3 => "Hashcat stopped at a restore checkpoint.",
-                4 => "Hashcat reached its configured runtime limit.",
-                _ => $"Hashcat exited with code {exit}. Check the target mode, attack settings and backend device availability."
-            };
+            var outcome = HashcatExitCodes.Describe(exit, _backendVersion);
+            var state = cancelled ? JobState.Cancelled : outcome.State;
+            var diagnostic = cancelled ? "Stopped by request. Resume is available if Hashcat saved a restore file." : outcome.Diagnostic;
             return new(exit, state, diagnostic, cancelled);
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException)
@@ -176,6 +173,12 @@ public sealed class HashcatRunningJob
 
     public static string SanitizeDiagnostic(string line)
     {
+        if (line.Contains("liblzma", StringComparison.OrdinalIgnoreCase) || line.Contains("libzstd", StringComparison.OrdinalIgnoreCase) || line.Contains("zlib", StringComparison.OrdinalIgnoreCase))
+            return "A compression runtime required by the selected input or grammar could not be used. Validate the complete Hashcat installation in Settings.";
+        if (line.Contains("feed_", StringComparison.OrdinalIgnoreCase) && (line.Contains("load", StringComparison.OrdinalIgnoreCase) || line.Contains("open", StringComparison.OrdinalIgnoreCase)))
+            return "A candidate-generator plugin could not load. Validate the complete Hashcat installation in Settings, including its feeds folder.";
+        if (line.Contains("restore-file version", StringComparison.OrdinalIgnoreCase))
+            return "This checkpoint belongs to an incompatible Hashcat release. Use the matching backend or retry as a new session; the checkpoint was preserved.";
         if (line.Contains("Outdated or broken", StringComparison.OrdinalIgnoreCase)) return "Hashcat rejected an outdated or broken compute runtime. Install a supported driver/runtime for the selected device, or use another supported device. Refresh Hardware afterward.";
         if (line.Contains("CL_INVALID_VALUE", StringComparison.OrdinalIgnoreCase))
             return line.Contains("clGetDeviceInfo", StringComparison.OrdinalIgnoreCase)
@@ -200,5 +203,30 @@ public sealed class HashcatRunningJob
         if (line.Contains("CL_", StringComparison.OrdinalIgnoreCase) || line.Contains("CUDA", StringComparison.OrdinalIgnoreCase)) return "The compute backend reported a driver or device error. Check Hardware and the selected device IDs; verify that the vendor driver/runtime supports the device.";
         if (line.Contains("Insufficient", StringComparison.OrdinalIgnoreCase) && line.Contains("memory", StringComparison.OrdinalIgnoreCase)) return "The backend has insufficient available memory for this job.";
         return "Hashcat reported a diagnostic. Private target, path and plaintext data were excluded from the application log.";
+    }
+}
+
+public static class HashcatExitCodes
+{
+    public static (JobState State, string Diagnostic) Describe(int exit, string? version = null)
+    {
+        var state = exit switch { 0 => JobState.Cracked, 1 => JobState.Exhausted, 2 => JobState.Cancelled, 3 => JobState.Checkpointed, 4 or 5 => JobState.Interrupted, _ => JobState.Failed };
+        var diagnostic = exit switch
+        {
+            0 => "Hashcat completed successfully; recovered results can be refreshed.",
+            1 => "Candidate space exhausted.",
+            2 => "Hashcat aborted the job.",
+            3 => "Hashcat stopped at a restore checkpoint.",
+            4 => "Hashcat reached its configured runtime limit.",
+            5 => "Hashcat stopped after its current work. The full candidate space was not exhausted.",
+            -2 when HashcatVersion.IsAtLeast8(version) => "Hashcat rejected the attack command. Review the attack settings, hash type and required file locations.",
+            -12 when HashcatVersion.IsAtLeast8(version) => "A target, wordlist, rule, mask or charset file has empty or unsupported contents. Review the selected inputs.",
+            -13 when HashcatVersion.IsAtLeast8(version) => "A Hashcat bridge or plugin could not load or failed. Check the configured backend installation and its required runtime.",
+            -11 => "The selected device failed Hashcat's self-test. Check Hardware and its driver before retrying.",
+            -10 => "Hashcat could not tune the selected device. Check Hardware and its driver or choose another device.",
+            <= -3 and >= -9 => "The compute backend could not run this hash type. Check Hardware for driver, memory or kernel support problems.",
+            _ => $"Hashcat exited with code {exit}. Check the target mode, attack settings and backend device availability."
+        };
+        return (state, diagnostic);
     }
 }

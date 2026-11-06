@@ -64,6 +64,7 @@ public sealed class InspectorViewModel : ObservableObject
     }
     public async Task RefreshDrivesAsync()
     {
+        using var operation = _services.BeginOperation();
         var previous = SelectedDrive?.VolumeId;
         var drives = await _services.BitLockerDrives.DiscoverAsync(_services.LifetimeToken);
         SelectedDrive = null; Drives.Clear(); foreach (var drive in drives) Drives.Add(drive);
@@ -74,6 +75,7 @@ public sealed class InspectorViewModel : ObservableObject
     private void VerifyRevision(long revision) { if (revision != _revision) throw new InvalidOperationException("The target changed while analysis was running. Analyze the current target again."); }
     public async Task LoadCatalogAsync()
     {
+        using var operation = _services.BeginOperation();
         if (_services.Installation is null) return;
         _catalog = (await _services.Backend.GetHashModesAsync(_services.Installation, _services.LifetimeToken)).ToList();
         Filter();
@@ -86,6 +88,7 @@ public sealed class InspectorViewModel : ObservableObject
     }
     public async Task<string> PrepareTargetAsync(CancellationToken externalCancellation = default)
     {
+        using var operation = _services.BeginOperation();
         if (PreparedTargetPath is not null) return PreparedTargetPath;
         var revision = _revision;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_targetCancellation.Token, externalCancellation);
@@ -155,6 +158,7 @@ public sealed class InspectorViewModel : ObservableObject
     }
     public async Task AnalyzeAsync(CancellationToken externalCancellation = default)
     {
+        using var operation = _services.BeginOperation();
         var installation = _services.RequireBackend();
         var revision = _revision;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_targetCancellation.Token, externalCancellation);

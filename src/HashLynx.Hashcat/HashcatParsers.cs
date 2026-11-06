@@ -8,7 +8,7 @@ namespace HashLynx.Hashcat;
 
 public static class HashcatHelpParser
 {
-    public static HashcatCapabilities ParseCapabilities(string help)
+    public static HashcatCapabilities ParseCapabilities(string help, string? version = null)
     {
         var capabilities = new HashcatCapabilities
         {
@@ -18,6 +18,10 @@ public static class HashcatHelpParser
             HashInfo = help.Contains("--hash-info", StringComparison.Ordinal),
             BackendInfo = help.Contains("--backend-info", StringComparison.Ordinal),
             Restore = help.Contains("--restore ", StringComparison.Ordinal),
+            RestorePosition = help.Contains("--restore-position", StringComparison.Ordinal),
+            RulesConcatenation = help.Contains("--rules-concat", StringComparison.Ordinal),
+            ExpandedRules = HashcatVersion.IsAtLeast8(version),
+            WorkloadProfilesEffective = !HashcatVersion.IsAtLeast8(version),
             CustomCharsetCount = help.Contains("--custom-charset8", StringComparison.Ordinal) ? 8 : 4
         };
         var section = Section(help, "Attack Modes");
@@ -34,6 +38,8 @@ public static class HashcatHelpParser
                 "Brute-force" => AttackFamilies.Mask,
                 "Hybrid Wordlist + Mask" => AttackFamilies.HybridWordlistMask,
                 "Hybrid Mask + Wordlist" => AttackFamilies.HybridMaskWordlist,
+                _ when id == 4 && label.StartsWith("PCFG", StringComparison.OrdinalIgnoreCase) => AttackFamilies.Pcfg,
+                _ when id == 12 && label.StartsWith("Hybrid", StringComparison.OrdinalIgnoreCase) => AttackFamilies.WordlistPattern,
                 _ => "hashcat:" + id.ToString(CultureInfo.InvariantCulture)
             };
             capabilities.AttackModes[key] = id;

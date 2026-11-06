@@ -8,6 +8,8 @@ public static class AttackFamilies
     public const string HybridWordlistMask = "hybrid-wordlist-mask";
     public const string HybridMaskWordlist = "hybrid-mask-wordlist";
     public const string Combinator = "combinator";
+    public const string Pcfg = "pcfg";
+    public const string WordlistPattern = "wordlist-pattern";
 }
 
 public sealed class AttackConfiguration
@@ -15,6 +17,8 @@ public sealed class AttackConfiguration
     public string Kind { get; set; } = AttackFamilies.Dictionary;
     public List<string> Wordlists { get; set; } = [];
     public List<string> RuleFiles { get; set; } = [];
+    public bool RulesConcatenated { get; set; }
+    public PcfgConfiguration? Pcfg { get; set; }
     /// <summary>A stable built-in rule recipe ID. Null preserves legacy custom-file or no-rule behavior.</summary>
     public string? RulePresetId { get; set; }
     public string? Mask { get; set; }
@@ -29,6 +33,15 @@ public sealed class AttackConfiguration
     public string? RightRule { get; set; }
     public bool Loopback { get; set; }
     public Dictionary<string, string> Parameters { get; set; } = [];
+}
+
+public sealed class PcfgConfiguration
+{
+    public bool UseHints { get; set; }
+    public string? HintFile { get; set; }
+    public int? MinimumLength { get; set; }
+    public int? MaximumLength { get; set; }
+    public string? ShapeMask { get; set; }
 }
 
 public sealed class CommonOptions
@@ -71,7 +84,13 @@ public sealed class JobRecord
     public string? Diagnostic { get; set; }
     public string? RestorePath { get; set; }
     public JobStatusSnapshot? LatestStatus { get; set; }
+    public string? BackendVersion { get; set; }
+    public string? BackendRuntimeDirectory { get; set; }
+    public string? ConfigurationFingerprint { get; set; }
+    public List<SessionInputSnapshot>? InputSnapshots { get; set; }
 }
+
+public sealed record SessionInputSnapshot(string Path, long Length, long LastWriteTimeUtcTicks);
 
 public sealed class AttackProfile
 {

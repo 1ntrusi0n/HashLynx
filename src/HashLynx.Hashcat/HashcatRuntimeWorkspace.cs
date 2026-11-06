@@ -7,12 +7,13 @@ namespace HashLynx.Hashcat;
 public sealed class HashcatRuntimeWorkspace(string cacheDirectory)
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private static readonly string[] SupportDirectories = ["bridges", "charsets", "layouts", "masks", "modules", "OpenCL", "Python", "Rust", "rules", "tunings", "extra"];
+    private static readonly string[] SupportDirectories = ["bridges", "charsets", "layouts", "masks", "modules", "OpenCL", "Python", "Rust", "rules", "tunings", "extra", "feeds", "pcfg", "tables"];
 
     public async Task<string> PrepareAsync(string executablePath, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var executable = new FileInfo(executablePath);
-        var identity = $"{executable.FullName}|{executable.Length}|{executable.LastWriteTimeUtc.Ticks}";
+        var identity = await Task.Run(() => AssetIdentity(executable, cancellationToken), cancellationToken).ConfigureAwait(false);
         var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)))[..20];
         var runtime = Path.Combine(cacheDirectory, "backend", key);
         var marker = Path.Combine(runtime, ".hashlynx-ready");
@@ -41,6 +42,25 @@ public sealed class HashcatRuntimeWorkspace(string cacheDirectory)
             return runtime;
         }
         finally { _gate.Release(); }
+    }
+
+    private static string AssetIdentity(FileInfo executable, CancellationToken cancellationToken)
+    {
+        var identity = new StringBuilder($"staging-v2|{executable.FullName}|{executable.Length}|{executable.LastWriteTimeUtc.Ticks}");
+        var source = executable.DirectoryName!;
+        var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = false };
+        var assets = SupportDirectories.Select(name => Path.Combine(source, name))
+            .Where(path => Directory.Exists(path) && (File.GetAttributes(path) & FileAttributes.ReparsePoint) == 0)
+            .SelectMany(path => Directory.EnumerateFiles(path, "*", options))
+            .Concat(Directory.EnumerateFiles(source, "*.dll"))
+            .Append(Path.Combine(source, "hashcat.hcstat2")).Where(File.Exists).Order(StringComparer.OrdinalIgnoreCase);
+        foreach (var path in assets)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var info = new FileInfo(path);
+            identity.Append('\n').Append(Path.GetRelativePath(source, path)).Append('|').Append(info.Length).Append('|').Append(info.LastWriteTimeUtc.Ticks);
+        }
+        return identity.ToString();
     }
 
     private static void CopyDirectory(string source, string destination, CancellationToken cancellationToken)

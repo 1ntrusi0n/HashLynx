@@ -40,7 +40,7 @@ public sealed class RecoveryQueueViewModel : ObservableObject
     private string _status = "Add attacks or a guided sequence from the Attack page.";
     public ObservableCollection<RecoveryQueueRow> Rows { get; } = [];
     public RecoveryQueueRow? Selected { get => _selected; set { Set(ref _selected, value); CommandManager.InvalidateRequerySuggested(); } }
-    public bool IsRunning { get => _running; private set { Set(ref _running, value); _services.IsQueueActive = value; CommandManager.InvalidateRequerySuggested(); } }
+    public bool IsRunning { get => _running; private set { _services.IsQueueActive = value; Set(ref _running, value); CommandManager.InvalidateRequerySuggested(); } }
     public string Status { get => _status; private set => Set(ref _status, value); }
     public bool CanEdit => _loaded && !IsRunning && !_editing;
     public ICommand StartCommand { get; }
@@ -56,7 +56,7 @@ public sealed class RecoveryQueueViewModel : ObservableObject
     public RecoveryQueueViewModel(AppServices services, JobsViewModel jobs, Func<HashcatJob, Task<JobRecord>>? run = null)
     {
         _services = services; _jobs = jobs; _run = run ?? jobs.StartAndWaitAsync;
-        StartCommand = new AsyncCommand(_ => StartAsync(), services.ReportError, _ => CanEdit && !_services.IsComputeBusy && Rows.Any(row => row.Step.State == RecoveryStepState.Pending
+        StartCommand = new AsyncCommand(_ => StartAsync(), services.ReportError, _ => CanEdit && _services.CanStartWork && !_services.IsComputeBusy && Rows.Any(row => row.Step.State == RecoveryStepState.Pending
             || (row.Step.State is RecoveryStepState.Interrupted or RecoveryStepState.Failed && jobs.Jobs.Any(job => job.Record.Id == row.Step.LastJobId && job.Record.State is JobState.Cracked or JobState.Exhausted))));
         PauseCommand = new RelayCommand(_ => RequestPause(), _ => IsRunning);
         RemoveCommand = new AsyncCommand(_ => EditAsync(() => { if (Selected is { } row) _document.Plans.Remove(row.Plan); }), services.ReportError, _ => CanEdit && Selected is not null);
@@ -71,6 +71,7 @@ public sealed class RecoveryQueueViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
+        using var operation = _services.BeginOperation();
         _document = await _services.Store.LoadQueueAsync(_services.LifetimeToken);
         RecoveryQueueTransitions.Reconcile(_document, _jobs.Jobs.Select(job => job.Record).ToArray());
         await SaveAsync(); _loaded = true; Rebuild();
@@ -79,6 +80,7 @@ public sealed class RecoveryQueueViewModel : ObservableObject
 
     public async Task AddAsync(HashcatJob template, IReadOnlyList<(string Name, AttackConfiguration Attack)> attacks, bool append = false, Func<bool>? stillCurrent = null)
     {
+        using var operation = _services.BeginOperation();
         if (!CanEdit) throw new InvalidOperationException("Pause the queue and wait for its current step to finish before editing it.");
         if (attacks.Count is < 1 or > 64) throw new InvalidOperationException("A sequence needs between 1 and 64 steps.");
         _editing = true;
@@ -124,7 +126,7 @@ public sealed class RecoveryQueueViewModel : ObservableObject
 
     public Task StartAsync()
     {
-        if (!CanEdit || _services.IsComputeBusy) throw new InvalidOperationException("Wait for the current operation to finish before starting the queue.");
+        if (!CanEdit || !_services.CanStartWork || _services.IsComputeBusy) throw new InvalidOperationException("Wait for the current operation to finish before starting the queue.");
         RecoveryQueueTransitions.Reconcile(_document, _jobs.Jobs.Select(job => job.Record).ToArray());
         Rebuild(); _pause = false; IsRunning = true; _worker = RunAsync();
         return Task.CompletedTask;
@@ -181,6 +183,7 @@ public sealed class RecoveryQueueViewModel : ObservableObject
 
     private async Task EditAsync(Action edit)
     {
+        using var operation = _services.BeginOperation();
         if (!CanEdit) return;
         _editing = true; var snapshot = Clone(_document);
         try { edit(); await SaveAsync(); Rebuild(); Status = "Queue changes saved. Session results and files are kept."; }

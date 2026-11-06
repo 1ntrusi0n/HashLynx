@@ -53,12 +53,13 @@ public sealed class HardwareViewModel : ObservableObject
         }, services.ReportError);
         RefreshCommand = new AsyncCommand(async _ =>
         {
+            using var operation = services.BeginOperation();
             Status = "Querying Hashcat backend information…";
             services.DeviceSelection.Invalidate();
             var devices = await services.Backend.GetDevicesAsync(services.RequireBackend(), services.LifetimeToken, refresh: true);
             Devices.Clear(); foreach (var device in devices) Devices.Add(device);
             Status = $"{Devices.Count} backend device(s) reported. Choose a recovery default below, or override device IDs in Expert run options. Refresh and reselect after driver changes. Live statistics appear in Jobs.";
-        }, exception => { Status = "Backend discovery failed. Confirm the Hashcat installation and GPU/runtime drivers."; services.ReportError(exception); }, _ => !IsTesting);
+        }, exception => { Status = "Backend discovery failed. Confirm the Hashcat installation and GPU/runtime drivers."; services.ReportError(exception); }, _ => !IsTesting && services.CanStartWork);
     }
 
     private async Task TestDeviceAsync(object? parameter)

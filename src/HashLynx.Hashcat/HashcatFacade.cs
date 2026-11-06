@@ -46,7 +46,7 @@ public sealed class HashcatFacade
         if (!match.Success) throw new HashcatException("The selected executable did not report a recognizable Hashcat version.");
         var help = await CaptureAsync(executablePath, ["--help"], cancellationToken, workingDirectory: runtime).ConfigureAwait(false);
         if (help.ExitCode != 0) throw new HashcatException("Hashcat's help check failed. Verify that OpenCL, modules and other release folders are present.");
-        return new(executablePath, match.Value, HashcatHelpParser.ParseCapabilities(help.StandardOutput)) { RuntimeDirectory = runtime };
+        return new(executablePath, match.Value, HashcatHelpParser.ParseCapabilities(help.StandardOutput, match.Value)) { RuntimeDirectory = runtime };
     }
 
     public async Task<IReadOnlyList<HashMode>> IdentifyAsync(HashcatInstallation installation, string targetPath, CancellationToken cancellationToken = default)
@@ -61,14 +61,15 @@ public sealed class HashcatFacade
 
     public async Task<IReadOnlyList<HashMode>> GetHashModesAsync(HashcatInstallation installation, CancellationToken cancellationToken = default)
     {
-        if (_modes.TryGetValue(installation.Version, out var existing)) return existing;
-        var filename = Path.Combine(_cacheDirectory, "hash-modes-" + Regex.Replace(installation.Version, "[^A-Za-z0-9_.-]", "_") + ".json");
+        if (_modes.TryGetValue(installation.CacheIdentity, out var existing)) return existing;
+        var identity = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(installation.CacheIdentity)))[..20];
+        var filename = Path.Combine(_cacheDirectory, "hash-modes-v2-" + identity + ".json");
         try
         {
             if (File.Exists(filename))
             {
                 var cached = JsonSerializer.Deserialize<List<HashMode>>(await File.ReadAllTextAsync(filename, cancellationToken).ConfigureAwait(false));
-                if (cached is { Count: > 0 }) { _modes[installation.Version] = cached; return cached; }
+                if (cached is { Count: > 0 }) { _modes[installation.CacheIdentity] = cached; return cached; }
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { Diagnostic?.Invoke("The hash-mode cache could not be read; querying the installed backend."); }
@@ -80,7 +81,7 @@ public sealed class HashcatFacade
             modes = HashModeParser.ParseHashInfo(result.StandardOutput);
         }
         if (modes.Count == 0) throw new HashcatException("No hash modes could be parsed from this Hashcat release. Its output format may have changed.");
-        _modes[installation.Version] = modes;
+        _modes[installation.CacheIdentity] = modes;
         try
         {
             Directory.CreateDirectory(_cacheDirectory);
@@ -94,13 +95,13 @@ public sealed class HashcatFacade
 
     public async Task<IReadOnlyList<BackendDevice>> GetDevicesAsync(HashcatInstallation installation, CancellationToken cancellationToken = default, bool refresh = false)
     {
-        if (!refresh && _hardware.TryGetValue(installation.ExecutablePath, out var cached)) return cached;
+        if (!refresh && _hardware.TryGetValue(installation.CacheIdentity, out var cached)) return cached;
         if (!installation.Capabilities.BackendInfo) throw new HashcatException("This Hashcat release does not expose backend information.");
         var result = await CaptureAsync(installation.ExecutablePath, ["--backend-info"], cancellationToken, 60, installation.WorkingDirectory).ConfigureAwait(false);
         var devices = BackendInfoParser.Parse(result.StandardOutput);
         if (result.ExitCode != 0 && devices.Count == 0) throw new HashcatException("Hashcat could not initialize its compute backends. Check your device drivers.");
         if (!string.IsNullOrWhiteSpace(result.StandardError)) Diagnostic?.Invoke("Backend discovery returned diagnostics; some devices may be unavailable.");
-        _hardware[installation.ExecutablePath] = devices;
+        _hardware[installation.CacheIdentity] = devices;
         return devices;
     }
 
@@ -108,8 +109,8 @@ public sealed class HashcatFacade
     public ValidationResult ValidateJob(HashcatInstallation installation, HashcatJob job)
     {
         var result = new JobValidator(Commands).Validate(installation, job);
-        if (_modes.TryGetValue(installation.Version, out var modes) && !modes.Any(m => m.Mode == job.HashMode)) result.Errors.Add(new("Hash mode", "The selected hash mode is not supported by the installed Hashcat catalog."));
-        if (_hardware.TryGetValue(installation.ExecutablePath, out var devices))
+        if (_modes.TryGetValue(installation.CacheIdentity, out var modes) && !HashcatModeAliases.IsSupported(installation, job.HashMode, modes)) result.Errors.Add(new("Hash mode", "The selected hash mode is not supported by the installed Hashcat catalog."));
+        if (_hardware.TryGetValue(installation.CacheIdentity, out var devices))
             foreach (var id in job.Options.Devices.Where(id => !devices.Any(d => d.Id == id))) result.Errors.Add(new("Devices", $"Backend device {id} was not discovered."));
         return result;
     }
@@ -120,15 +121,26 @@ public sealed class HashcatFacade
         if (!validation.IsValid) throw new HashcatException(string.Join(Environment.NewLine, validation.Errors.Select(e => e.Message)));
         Directory.CreateDirectory(Commands.GetJobDirectory(job));
         if (job.Attack.Loopback) Directory.CreateDirectory(Path.Combine(Commands.GetJobDirectory(job), "induction"));
-        return _runner.Start(BuildCommand(installation, job), progress, cancellationToken, installation.Capabilities.InteractiveControls);
+        return _runner.Start(BuildCommand(installation, job), progress, cancellationToken, installation.Capabilities.InteractiveControls, installation.Version);
     }
 
     public string GetRestorePath(HashcatJob job) => Commands.GetRestorePath(job);
     public bool CanRestore(HashcatJob job) => File.Exists(GetRestorePath(job));
+    public void RecordProvenance(HashcatInstallation installation, JobRecord record) => HashcatRestoreGuard.Record(installation, record, Commands);
+    public RestoreAvailability GetRestoreAvailability(HashcatInstallation installation, JobRecord record) => HashcatRestoreGuard.Check(installation, record, Commands);
+    public HashcatRunningJob RestoreJob(HashcatInstallation installation, JobRecord record, IProgress<HashcatEvent>? progress = null, CancellationToken cancellationToken = default)
+    {
+        var availability = GetRestoreAvailability(installation, record);
+        if (!availability.CanRestore) throw new HashcatException(availability.Message);
+        var validation = new JobValidator(Commands).Validate(installation, record.Configuration, restoring: true);
+        if (!validation.IsValid) throw new HashcatException(string.Join(Environment.NewLine, validation.Errors.Select(error => error.Message)));
+        return _runner.Start(Commands.BuildRestore(installation, record.Configuration), progress, cancellationToken, installation.Capabilities.InteractiveControls, installation.Version);
+    }
     public HashcatRunningJob RestoreJob(HashcatInstallation installation, HashcatJob job, IProgress<HashcatEvent>? progress = null, CancellationToken cancellationToken = default)
     {
+        if (installation.IsVersion8OrLater) throw new HashcatException("Safe restore requires the saved session record and verified inputs. Retry legacy sessions as new attempts.");
         if (!installation.Capabilities.Restore || !CanRestore(job)) throw new HashcatException("No saved restore file is available for this job.");
-        return _runner.Start(Commands.BuildRestore(installation, job), progress, cancellationToken, installation.Capabilities.InteractiveControls);
+        return _runner.Start(Commands.BuildRestore(installation, job), progress, cancellationToken, installation.Capabilities.InteractiveControls, installation.Version);
     }
 
     /// <summary>Reads only recoveries written by this session. The shared potfile cannot establish session ownership.</summary>

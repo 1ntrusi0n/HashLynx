@@ -71,7 +71,7 @@ public sealed class ResultsViewModel : ObservableObject
         _loadCancellation?.Cancel();
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_services.LifetimeToken);
         _loadCancellation = cancellation;
-        try { await LoadAsync(version, cancellation.Token); }
+        try { using var operation = _services.BeginOperation(); await LoadAsync(version, cancellation.Token); }
         catch (OperationCanceledException) { if (version == _loadVersion) Status = "Result loading cancelled."; }
         catch (Exception exception) { if (version == _loadVersion) { Results.Clear(); SelectedResult = null; Status = "Could not load results. Check the session output files and permissions, then refresh."; _services.ReportError(exception); } }
         finally { if (ReferenceEquals(_loadCancellation, cancellation)) _loadCancellation = null; }
@@ -115,6 +115,7 @@ public sealed class ResultsViewModel : ObservableObject
 
     private async Task ExportAsync()
     {
+        using var operation = _services.BeginOperation();
         if (Results.Count == 0) throw new InvalidOperationException("Load recovered results before exporting.");
         if (_services.Dialogs.SaveFile("Export recovered credentials", "hashlynx-results.csv", "CSV file|*.csv") is not { } path) return;
         static string Escape(string text) => "\"" + text.Replace("\"", "\"\"") + "\"";

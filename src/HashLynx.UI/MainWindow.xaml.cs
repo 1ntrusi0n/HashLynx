@@ -8,7 +8,16 @@ public partial class MainWindow : Window
 {
     private bool _closeApproved;
     private bool _closing;
-    public MainWindow() { InitializeComponent(); Closing += OnClosing; }
+    public MainWindow()
+    {
+        InitializeComponent(); Closing += OnClosing;
+        DataContextChanged += (_, args) =>
+        {
+            if (args.OldValue is ShellViewModel oldShell) oldShell.CloseRequested -= CloseAfterUpdatePreparation;
+            if (args.NewValue is ShellViewModel newShell) newShell.CloseRequested += CloseAfterUpdatePreparation;
+        };
+    }
+    private void CloseAfterUpdatePreparation() { _closeApproved = true; Close(); }
     private async void OnClosing(object? sender, CancelEventArgs args)
     {
         if (_closeApproved || DataContext is not ShellViewModel shell) return;

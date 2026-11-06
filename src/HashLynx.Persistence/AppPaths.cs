@@ -11,6 +11,7 @@ public sealed class AppPaths
     public string TargetsDirectory => Path.Combine(Root, "targets");
     public string CacheDirectory => Path.Combine(Root, "cache");
     public string LogsDirectory => Path.Combine(Root, "logs");
+    public string UpdatesDirectory => Path.Combine(Root, "updates");
 
     public AppPaths(string? root = null)
     {

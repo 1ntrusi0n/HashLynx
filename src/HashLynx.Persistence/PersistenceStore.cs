@@ -8,12 +8,15 @@ public sealed class PersistenceStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, PropertyNameCaseInsensitive = true };
     private readonly SemaphoreSlim gate = new(1, 1);
+    private bool _settingsWriteBlocked;
     public AppPaths Paths { get; }
 
     public PersistenceStore(AppPaths? paths = null) => Paths = paths ?? new AppPaths();
 
     public async Task<AppSettings> LoadSettingsAsync(CancellationToken ct = default)
     {
+        try
+        {
         var settings = await ReadAsync("settings.json", () => new AppSettings(), ct).ConfigureAwait(false);
         if (settings.SchemaVersion > 1)
             throw new InvalidDataException("These settings were written by a newer HashLynx version. They have been preserved.");
@@ -24,13 +27,34 @@ public sealed class PersistenceStore
         settings.DefaultDeviceIds ??= [];
         if (settings.DefaultDeviceIds.Any(id => id <= 0))
             throw new InvalidDataException("Saved recovery device IDs must be positive. Settings were preserved; inspect your data directory.");
+        _settingsWriteBlocked = false;
         return settings;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            _settingsWriteBlocked = true;
+            throw;
+        }
     }
 
     public Task SaveSettingsAsync(AppSettings settings, CancellationToken ct = default)
     {
+        if (_settingsWriteBlocked) throw new InvalidDataException("Settings could not be loaded and have been preserved. Repair the settings file and restart before saving preferences.");
         if (settings.SchemaVersion > 1) throw new InvalidDataException("Cannot overwrite settings from a newer version.");
         return WriteAsync("settings.json", settings, ct);
+    }
+
+    public async Task<UpdateCheckState> LoadUpdateCheckStateAsync(CancellationToken ct = default)
+    {
+        var state = await ReadAsync("update-check.json", () => new UpdateCheckState(), ct).ConfigureAwait(false);
+        if (state.SchemaVersion != 1) throw new InvalidDataException("The update-check history is unsupported and has been preserved.");
+        return state;
+    }
+
+    public Task SaveUpdateCheckStateAsync(UpdateCheckState state, CancellationToken ct = default)
+    {
+        if (state.SchemaVersion != 1) throw new InvalidDataException("Cannot overwrite unsupported update-check history.");
+        return WriteAsync("update-check.json", state, ct);
     }
 
     public Task<List<JobRecord>> LoadJobsAsync(CancellationToken ct = default) => ReadAsync("jobs.json", () => new List<JobRecord>(), ct);

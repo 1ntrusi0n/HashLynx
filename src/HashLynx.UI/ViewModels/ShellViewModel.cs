@@ -3,6 +3,7 @@ using HashLynx.UI.Services;
 using System.Collections.ObjectModel;
 using HashLynx.Core;
 using System.Windows.Input;
+using HashLynx.Updates;
 
 namespace HashLynx.UI.ViewModels;
 
@@ -12,6 +13,9 @@ public sealed class ShellViewModel : ObservableObject
 {
     private NavigationItem _selected;
     private bool _initialized;
+    private readonly SemaphoreSlim _closeGate = new(1, 1);
+    private bool _shutdownComplete;
+    public event Action? CloseRequested;
     public AppServices Services { get; }
     public AttackViewModel Attack { get; }
     public JobsViewModel Jobs { get; }
@@ -39,6 +43,7 @@ public sealed class ShellViewModel : ObservableObject
     {
         Services = services;
         Jobs = new(services); Settings = new(services); Extractors = new(services);
+        Settings.Updates.RestartRequested = RestartForUpdateAsync;
         Queue = new(services, Jobs);
         Attack = new(services, Jobs, () => Selected = Navigation!.First(item => item.Page == Jobs));
         Navigation = [new("Attack", "\uE945", Attack), new("Jobs", "\uE9D9", Jobs), new("Results", "\uE8D7", new ResultsViewModel(services, Jobs)), new("Hardware", "\uE7F4", new HardwareViewModel(services)), new("Settings / About", "\uE713", Settings)];
@@ -92,7 +97,15 @@ public sealed class ShellViewModel : ObservableObject
     }
     public async Task InitializeAsync()
     {
-        await Services.InitializeAsync(); Settings.Load();
+        try { await Services.InitializeAsync(); }
+        finally
+        {
+            if (Services.SettingsLoaded)
+            {
+                Settings.Load();
+                _ = Settings.Updates.CheckAutomaticallyAsync();
+            }
+        }
         await Jobs.InitializeAsync(); await Queue.InitializeAsync(); await Attack.InitializeAsync(); await Extractors.RefreshAsync();
         _initialized = true;
         if (Services.Installation is null) ShowSettings();
@@ -112,7 +125,46 @@ public sealed class ShellViewModel : ObservableObject
     private void RaiseCompletion() { Raise(nameof(CompletionVisible)); Raise(nameof(CompletionTitle)); Raise(nameof(CompletionDetail)); Raise(nameof(CompletionHasResults)); Raise(nameof(CompletionActionLabel)); Raise(nameof(CompletionHasAction)); }
     public async Task<bool> RequestCloseAsync()
     {
-        if (Jobs.HasRunning && !Services.Dialogs.Confirm("There are running recovery jobs. Close HashLynx and stop them? To preserve a checkpoint first, choose No and use Checkpoint in Jobs.", "Close HashLynx")) return false;
-        Queue.RequestPause(); Services.CancelPendingOperations(); await Jobs.StopAllAsync(); await Queue.ShutdownAsync(); _notifications.Dispose(); return true;
+        await _closeGate.WaitAsync();
+        try
+        {
+            if (_shutdownComplete) return true;
+            if (Jobs.HasRunning && !Services.Dialogs.Confirm("There are running recovery jobs. Close HashLynx and stop them? To preserve a checkpoint first, choose No and use Checkpoint in Jobs.", "Close HashLynx")) return false;
+            Queue.RequestPause(); Services.CancelPendingOperations();
+            await Jobs.StopAllAsync(); await Queue.ShutdownAsync();
+            _notifications.Dispose(); _shutdownComplete = true;
+            return true;
+        }
+        finally { _closeGate.Release(); }
+    }
+
+    private async Task<bool> RestartForUpdateAsync(StagedApplicationUpdate update)
+    {
+        if (CloseRequested is null || Jobs.HasRunning || !Services.TryBeginUpdate()) return false;
+        System.Diagnostics.Process? helper = null;
+        var closing = false;
+        try
+        {
+            // Launch the waiting helper before cancellation: a launch failure leaves the app usable.
+            // The service gate prevents a new extraction, queue or recovery between this check and exit.
+            if (Services.IsBusyForUpdate || Jobs.HasRunning) return false;
+            helper = ApplicationUpdateLauncher.Start(update, Environment.ProcessId);
+            await ApplicationUpdateLauncher.WaitForReadyAsync(update, helper, Services.LifetimeToken);
+            if (Services.IsBusyForUpdate || Jobs.HasRunning) return false;
+            if (!await RequestCloseAsync()) return false;
+            closing = true;
+            CloseRequested.Invoke();
+            return true;
+        }
+        finally
+        {
+            if (!closing)
+            {
+                try { if (helper is { HasExited: false }) helper.Kill(entireProcessTree: true); }
+                catch (InvalidOperationException) { }
+                Services.CancelUpdatePreparation();
+            }
+            helper?.Dispose();
+        }
     }
 }

@@ -55,13 +55,14 @@ public sealed class HashcatHardwareCheckService
             var hash = Convert.ToHexString(MD5.HashData(answerBytes)).ToLowerInvariant();
             await File.WriteAllTextAsync(target, hash + "\n", new UTF8Encoding(false), deadline.Token).ConfigureAwait(false);
             await File.WriteAllTextAsync(words, "HashLynxSample\n" + answer + "\n", new UTF8Encoding(false), deadline.Token).ConfigureAwait(false);
-            var arguments = new string[]
+            var arguments = new List<string>
             {
                 "--hash-type", "0", "--attack-mode", "0", "--backend-devices", deviceId.ToString(CultureInfo.InvariantCulture),
-                "--opencl-device-types", "1,2,3", "--workload-profile", "1", "--runtime", "30",
+                "--opencl-device-types", installation.IsVersion8OrLater ? "1,2" : "1,2,3", "--runtime", "30",
                 "--session", "hashlynx-check-" + Path.GetFileName(directory), "--potfile-disable", "--restore-disable",
                 "--logfile-disable", "--quiet", "--outfile", output, "--outfile-format", "1,3", "--", target, words
             };
+            if (!installation.IsVersion8OrLater) arguments.InsertRange(0, ["--workload-profile", "1"]);
             var capture = await _capture(new(installation.ExecutablePath, runtime, arguments), deadline.Token).ConfigureAwait(false);
             deadline.Token.ThrowIfCancellationRequested();
             if (capture.ExitCode == 0 && await ContainsAnswerAsync(output, hash, Convert.ToHexString(answerBytes), deadline.Token).ConfigureAwait(false))

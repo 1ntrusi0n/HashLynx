@@ -11,6 +11,10 @@ public sealed class HashcatCapabilities
     public bool HashInfo { get; set; }
     public bool Restore { get; set; }
     public bool InteractiveControls { get; set; }
+    public bool RestorePosition { get; set; }
+    public bool RulesConcatenation { get; set; }
+    public bool ExpandedRules { get; set; }
+    public bool WorkloadProfilesEffective { get; set; } = true;
     public int CustomCharsetCount { get; set; } = 4;
     public Dictionary<string, int> AttackModes { get; set; } = [];
 }
@@ -20,7 +24,17 @@ public sealed record HashcatInstallation(string ExecutablePath, string Version, 
     public string DirectoryPath => Path.GetDirectoryName(ExecutablePath)!;
     public string? RuntimeDirectory { get; init; }
     public string WorkingDirectory => RuntimeDirectory ?? DirectoryPath;
+    public bool IsVersion8OrLater => HashcatVersion.IsAtLeast8(Version);
+    public string CacheIdentity => ExecutablePath + "|" + Version + "|" + WorkingDirectory;
 }
+
+public static class HashcatVersion
+{
+    public static bool IsAtLeast8(string? version) => version is not null
+        && int.TryParse(version.TrimStart('v', 'V').Split('.', '-', '+')[0], out var major) && major >= 8;
+}
+
+public sealed record RestoreAvailability(bool CanRestore, string Message);
 
 public sealed record HashcatCommand(string ExecutablePath, string WorkingDirectory, IReadOnlyList<string> Arguments)
 {

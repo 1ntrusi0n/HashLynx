@@ -34,7 +34,7 @@ public sealed partial class AttackViewModel
     public bool IsBuiltInMask => Family == 1 && SelectedMaskSource.Kind == MaskInputKind.BuiltIn;
     public bool ShowMaskText => UsesMask && SelectedMaskSource.Kind == MaskInputKind.Text;
     public bool ShowMaskFile => UsesMask && SelectedMaskSource.Kind == MaskInputKind.File;
-    public bool UsesCustomMaskOptions => UsesMask && !IsBuiltInMask;
+    public bool UsesCustomMaskOptions => Expert && UsesMask && !IsBuiltInMask;
     public string? EffectiveMaskPresetId => IsBuiltInMask ? MaskPresetCatalog.Common1000Id : null;
     public string? EffectiveMask => ShowMaskText ? Mask : null;
     public string? EffectiveMaskFile => ShowMaskFile ? MaskFile : null;

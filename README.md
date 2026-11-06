@@ -4,21 +4,24 @@
 
 A local Windows desktop workspace for **Hashcat**: inspect recovery targets, configure attacks, monitor jobs, and review results from one native WPF interface.
 
-**Status: 0.1.0 — early functional bootstrap.** HashLynx orchestrates the official Hashcat executable; it does not implement a cracking engine. It is intended for legitimate password recovery, authorized security auditing, research, labs, and CTFs.
+**Version 0.2.0 — Created by err0r.** HashLynx orchestrates the official Hashcat executable; it does not implement a cracking engine. It is intended for legitimate password recovery, authorized security auditing, research, labs, and CTFs.
 
 HashLynx is an independent GUI frontend. Hashcat is a separate third-party project, is not developed by HashLynx, and does not sponsor or endorse this application. Users must separately obtain and configure Hashcat. This repository and its publish output do not bundle it.
+
+Download the Windows x64 application from [GitHub Releases](https://github.com/1ntrusi0n/HashLynx/releases/latest). Extract the entire `HashLynx-win-x64.zip`, then run `win-x64/HashLynx.exe`. Keep the included files and helper folders together; the .NET 10 Desktop Runtime and a separate Hashcat installation are required. Existing 0.1.0 installations should upgrade by extracting the complete new package into a separate folder; saved settings and recovery history remain in LocalApplicationData.
 
 ## What is implemented
 
 - Native C#/.NET 10 WPF shell with MVVM, the supplied branding, a multi-size Windows icon, navy/teal styling, and Dark/Light/System preferences.
 - **Target Inspector** with Paste Hash, Hash File, Encrypted File, and BitLocker Drive inputs; file browsing and drag/drop; source/context selection; Hashcat identification; and a searchable manual mode catalog generated from the installed release.
 - Expert password hints with candidate previews, fixed beginning/ending patterns, remembered-word variations, and persistent sequential attack queues. Saved queues remain accessible in Basic mode.
-- Dictionary, Mask, both Hybrid directions, and Combinator configurations. Dictionary attacks include original Quick, Normal, Heavy, and Super rule presets, an 848-word starter list, and clickable rule examples. Expert mode supports custom rule files and multiple wordlists.
+- Beginner choices for **Wordlist**, **Known password pattern**, and Hashcat 8 **Likely passwords** (PCFG). Wordlist attacks include original Quick, Normal, Heavy, and Super rule presets, an 848-word starter list, and clickable examples. Expert adds Hybrid, Combinator, PCFG hints/constraints, words inside patterns, custom rules and multiple wordlists.
 - Mask/custom charset validation, increment settings, workload/device/temperature controls, named sessions, potfile/output options, and a constrained Expert argument extension field.
 - Built-in **Common patterns (1,000)** for Mask attacks, alongside custom masks and files. Sources, corpus limits, and regeneration are documented in [built-in masks](docs/built-in-masks.md).
 - Automatic validation when starting recovery, with run options, a copyable command preview, and a separate Preflight button in Expert mode. Commands execute with `ProcessStartInfo.ArgumentList`, never through a shell.
 - A live **Ready to recover** checklist for the target, attack inputs and device setup, with direct links to the relevant controls and colors that distinguish ready, missing and pending items.
-- Asynchronous jobs, parsed JSON status metrics, stop, job history, interrupted-job detection, and restore when a saved Hashcat restore file exists.
+- Asynchronous jobs, parsed JSON status metrics, stop, job history, interrupted-job detection, and validated restoration from compatible checkpoints.
+- Offline release history in Settings / About, optional GitHub version checks, and user-approved application updates with package verification and rollback.
 - Session-specific recovered results, an all-sessions view, plaintext hide/reveal, copy, and export. Completion banners link to results; optional Windows notifications keep passwords hidden. Hardware discovery includes a bounded known-answer recovery test per device.
 - An extensible extractor registry for PDF, ZIP, RAR, 7-Zip, BitLocker, Microsoft Office, and KeePass. All seven formats are built in and need no extractor configuration.
 - Wordlist library names, cached background line counts, missing-file repair, and cancellable combine/deduplicate/byte-length filtering into new files.
@@ -62,7 +65,7 @@ Keep the full release together. `hashcat/` is Git-ignored. HashLynx detects a de
 
 On Windows, Hashcat can create caches even during help/identification. HashLynx prepares a per-user backend workspace containing support assets and runs the configured original executable there. This protects the supplied release from cache/session writes. First validation needs time and disk space to copy support assets; later validations reuse that workspace. HashLynx does not download or replace Hashcat.
 
-The workspace cache follows the executable's identity. If you update support assets without replacing the executable, close HashLynx and remove only `%LOCALAPPDATA%\HashLynx\cache\backend\` to rebuild it on the next validation. Never remove your original Hashcat release or job/results directories for this refresh.
+The workspace cache follows the executable and support assets, including Hashcat 8 feeds, grammars and tables. Changed installations get a fresh managed workspace. Keep older runtime workspaces while their saved sessions may still need them. Never remove your original Hashcat release or job/results directories to refresh a cache. See [Hashcat 8 compatibility](docs/hashcat-8.md).
 
 ## Build and run
 
@@ -82,6 +85,8 @@ dotnet publish src/HashLynx.UI -c Release -r win-x64 --self-contained false -o a
 ```
 
 Or run `./scripts/build.ps1 -Publish`. Copy the publish directory as a unit. Obtain Hashcat separately and put its complete release alongside the application under `hashcat\`, or configure its existing location in Settings. Runtime dependencies are not silently installed.
+
+For an update-ready release ZIP and checksums, use `./scripts/package-release.ps1`. The package includes the first-party updater and an inventory of application files. See [application updates and packaging](docs/application-updates.md).
 
 ## Recovery workflow
 
@@ -106,7 +111,7 @@ Check **Show All Sessions Results** to combine results from all sessions current
 
 To clean up history, select an inactive session on **Jobs** and click **Delete session**. **Undo delete** restores removed entries while HashLynx remains open. Deletion removes the history entry only: target, output, checkpoint, and potfile data remain on disk. Running and paused sessions cannot be deleted.
 
-Basic mode manages devices, session names, result paths, and other run settings. Enable **Expert mode** to use password hints and queue-building controls, select custom rule files, adjust run options, or use the separate Preflight and command-preview controls. Mask, Hybrid, and Combinator attacks remain available for users who need them.
+Beginner mode manages devices, session names, result paths, and other run settings. Its three guided choices are Wordlist, Known password pattern, and Likely passwords (the last requires Hashcat 8). Enable **Expert mode (this session)** for Hybrid, Combinator, words inside patterns, password hints, queue building, custom rules, run options, Preflight, and command preview. **Start in Expert mode** in Settings sets the next-launch preference; changing the session switch does not save that preference. Returning to Beginner from an Expert-only attack selects Wordlist while retaining advanced draft inputs. Saved queues still run their original configurations.
 
 With no device preference saved, **checked automatic selection** verifies a small local sample before starting. It tries available GPUs, then CPUs and other devices, and uses the first device that actually recovers the sample. Failed devices are skipped without driver overrides. The successful choice is cached while the app stays open and the reported hardware remains unchanged; refresh Hardware or a failed recovery clears it. A sample check can take up to 90 seconds per device. Jobs shows the check and allows Stop; queue pause and app shutdown cancel pending checks. Explicit Hardware defaults and Expert IDs keep their existing behavior. A passed sample does not guarantee support or speed for every hash type.
 
@@ -134,7 +139,7 @@ The application never adds `--force`. Backend warnings and driver incompatibilit
 
 If jobs immediately fail with a compute-runtime or "no usable device" error, see [compute troubleshooting](docs/compute-troubleshooting.md). Installation validation and device enumeration do not prove that a device can run recovery kernels. In **Hardware**, refresh devices and choose **Use this device by default** on the CPU or GPU you want to use. The saved choice applies immediately to new Basic attacks and survives restart. The Attack page shows the effective selection. Explicit Expert device IDs override the saved default; leaving them blank uses it. **Use automatic selection** in Hardware clears the preference. Refresh and reselect after runtime or hardware changes because device IDs can change.
 
-With the verified Hashcat 7.1.2 mappings, rule files apply to Dictionary; Hybrid and Combinator expose inline left/right rules. Dictionary loopback requires a rule file or preset. Expert custom rule files replace the preset; selecting several custom files causes Hashcat to combine their transformations multiplicatively. Choose **No Rules** in Basic or Expert mode to run an unmodified dictionary. Expert arguments use one separated argument per line, for example `--runtime=60`; the preview remains read-only.
+With Hashcat 7.1.2, rule files apply to Dictionary; Hybrid and Combinator expose inline left/right rules. Hashcat 8 supports rules on additional attack families. Expert custom rule files replace the preset; multiple custom files retain their historical multiplicative chaining unless **Try rule lists separately** is selected on Hashcat 8. For example, 100 and 200 rules mean 20,000 chained combinations, or 300 separate applications. Dictionary loopback requires a rule file or preset. Choose **No Rules** for unchanged words. Expert arguments use one separated argument per line, for example `--runtime=60`; the preview remains read-only.
 
 Pause/resume/checkpoint controls are disabled unless the backend's interactive transport is known to work. This Windows bootstrap does not claim verified console-key control through redirected pipes. **Stop** terminates the child process tree. Resume after exit is available only if Hashcat already wrote a usable restore file; stopping cannot guarantee a fresh checkpoint. Job history records completion, exhaustion, interruption, failure, and stop outcomes separately.
 
@@ -168,7 +173,7 @@ BitLocker also reads raw Windows 7+ partition images with a user-password protec
 
 ## Privacy, data, and diagnostics
 
-The application works locally/offline. It has no telemetry and does not upload hashes, recovered passwords, encrypted files, wordlists, or results. Configured external tools run locally with ordinary user permissions.
+Recovery works locally/offline. HashLynx has no telemetry and does not upload hashes, recovered passwords, encrypted files, wordlists, or results. Optional update checks contact GitHub for public release information; explicit downloads retrieve application packages. **Check for Updates Automatically** starts unchecked. Downloads and **Restart and update** always require your choice. Configured external tools run locally with ordinary user permissions.
 
 The application stores mutable data under `%LOCALAPPDATA%\HashLynx\`:
 
@@ -205,7 +210,7 @@ These files are **not encrypted by HashLynx**. Result files and potfiles contain
 | `assets/wordlists` | Original bundled starter wordlist |
 | `docs/`, `scripts/` | Integration notes and build/validation tools |
 
-Attack family identifiers are strings; backend mode IDs are obtained from installed help and kept in the integration layer. Extractors are selected through a registry, allowing new formats without file-type logic in the GUI. There is no webview shell or network service.
+Attack family identifiers are strings; backend mode IDs are obtained from installed help and kept in the integration layer. Extractors are selected through a registry, allowing new formats without file-type logic in the GUI. The BCL-only Updates library handles optional GitHub access and package validation; the separate Updater helper replaces application-owned files after exit. There is no webview shell or listening network service.
 
 ## Validation and current limits
 
@@ -226,7 +231,7 @@ Run `dotnet run --project tests/HashLynx.UI.Smoke -c Release -- artifacts/ui-smo
 
 To additionally exercise a real, bounded NTLM recovery with the starter list and Normal preset, set `HASHLYNX_TEST_DEVICE` to a current device ID before running the connected WPF smoke test. The check saves that device through Hardware, then runs Start → Jobs → Results in Basic mode. This opt-in check uses a public known-answer fixture and isolated application data; it requires a working compute runtime.
 
-Status, ETA, temperatures, and device utilization are shown only when supplied by Hashcat. Candidate strings are deliberately omitted from persisted monitoring data to reduce secret duplication. Large result sets currently load into memory when refreshed; very large recovery outputs may need a future paged results viewer. File structural analysis is bounded and best-effort. The first release does not include installers, automatic updates, automatic dependency downloads, or new attack families beyond those listed above.
+Status, ETA, temperatures, and device utilization are shown only when supplied by Hashcat. Candidate strings are deliberately omitted from persisted monitoring data to reduce secret duplication. Large result sets currently load into memory when refreshed; very large recovery outputs may need a future paged results viewer. File structural analysis is bounded and best-effort. Hashcat 7 checkpoints cannot resume under Hashcat 8; keep the matching backend or start a new attempt. HashLynx does not install drivers/runtimes, update Hashcat, or silently install application updates. Table attacks, account-based attacks, custom recipes and arbitrary feed plugins are deferred.
 
 ## Screenshots
 

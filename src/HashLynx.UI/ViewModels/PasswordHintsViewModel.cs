@@ -9,9 +9,10 @@ namespace HashLynx.UI.ViewModels;
 
 public sealed class PasswordHintsViewModel : ObservableObject
 {
+    private readonly AppServices _services;
     private string _words = "", _prefix = "", _suffix = "", _characters = "Digits", _summary = "Describe what you remember, then preview the attempts.";
     private string _examples = "", _steps = "";
-    private bool _variations, _pattern;
+    private bool _variations, _pattern, _includePcfgAttempt;
     private string _minimum = "8", _maximum = "10";
     private PasswordHints? _previewed;
     public string Words { get => _words; set { if (Set(ref _words, value)) Invalidate(); } }
@@ -20,6 +21,8 @@ public sealed class PasswordHintsViewModel : ObservableObject
     public string Characters { get => _characters; set { if (Set(ref _characters, value)) Invalidate(); } }
     public bool TryVariations { get => _variations; set { if (Set(ref _variations, value)) Invalidate(); } }
     public bool UsePattern { get => _pattern; set { if (Set(ref _pattern, value)) Invalidate(); } }
+    public bool IncludePcfgAttempt { get => _includePcfgAttempt; set { if (Set(ref _includePcfgAttempt, value)) Invalidate(); } }
+    public bool PcfgAvailable => _services.Installation?.Capabilities.AttackModes.ContainsKey(HashLynx.Core.AttackFamilies.Pcfg) == true;
     public string MinimumLength { get => _minimum; set { if (Set(ref _minimum, value)) Invalidate(); } }
     public string MaximumLength { get => _maximum; set { if (Set(ref _maximum, value)) Invalidate(); } }
     public IReadOnlyList<string> CharacterChoices => PasswordHintPlanner.CharacterChoices;
@@ -31,14 +34,18 @@ public sealed class PasswordHintsViewModel : ObservableObject
 
     public PasswordHintsViewModel(AppServices services, Func<PasswordHintPlan, Func<bool>, Task> enqueue, Func<bool> canQueue)
     {
+        _services = services;
+        services.BackendChanged += () => { Raise(nameof(PcfgAvailable)); Invalidate(); };
         PreviewCommand = new RelayCommand(_ =>
         {
             try
             {
+                if (IncludePcfgAttempt && !PcfgAvailable) throw new ArgumentException("The optional likely-passwords attempt requires a complete Hashcat 8 release. Validate it in Settings first.");
                 var request = Request(); var plan = PasswordHintPlanner.Build(request);
                 Steps = string.Join(Environment.NewLine, plan.Attacks.Select((attack, index) => $"{index + 1}. {attack.Name} ({attack.Candidates:N0} candidates)"));
+                if (IncludePcfgAttempt) Steps += Environment.NewLine + $"{plan.Attacks.Count + 1}. Likely passwords (PCFG){(plan.Words.Count > 0 ? " using remembered words" : " using the default model")} — count depends on the model.";
                 Examples = string.Join(Environment.NewLine, plan.Examples);
-                Summary = $"{plan.Attacks.Count} attempts; up to {plan.CandidateEstimate:N0} candidate applications. Variations can overlap."
+                Summary = $"{plan.Attacks.Count + (IncludePcfgAttempt ? 1 : 0)} attempts; up to {plan.CandidateEstimate:N0} candidate applications{(IncludePcfgAttempt ? " plus the separate PCFG attempt" : "")}. Variations can overlap."
                     + (plan.CandidateEstimate > 1_000_000_000_000L ? " This is a very large search. Narrow the length or unknown characters before running if possible." : "")
                     + " These attempts cover only the patterns you entered; recovery is not guaranteed.";
                 _previewed = request; CommandManager.InvalidateRequerySuggested();
@@ -47,10 +54,11 @@ public sealed class PasswordHintsViewModel : ObservableObject
         });
         QueueCommand = new AsyncCommand(async _ =>
         {
+            using var operation = services.BeginOperation();
             var request = Request();
             if (_previewed != request) throw new InvalidOperationException("Preview the current hints before adding their sequence.");
             await enqueue(PasswordHintPlanner.Build(request), () => _previewed == request);
-        }, error => { Summary = error.Message; services.ReportError(error); }, _ => _previewed is not null && canQueue());
+        }, error => { Summary = error.Message; services.ReportError(error); }, _ => _previewed is not null && canQueue() && services.CanStartWork && (!IncludePcfgAttempt || PcfgAvailable));
     }
     private PasswordHints Request()
     {

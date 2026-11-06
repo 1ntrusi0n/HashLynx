@@ -15,6 +15,10 @@
     <ProjectReference Include="../HashLynx.Persistence/HashLynx.Persistence.csproj" />
     <ProjectReference Include="../HashLynx.Drives/HashLynx.Drives.csproj" />
     <ProjectReference Include="../HashLynx.DriveReader/HashLynx.DriveReader.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../HashLynx.Updates/HashLynx.Updates.csproj" />
+    <ProjectReference Include="../HashLynx.Updater/HashLynx.Updater.csproj" ReferenceOutputAssembly="false" />
+    <EmbeddedResource Include="../../CHANGELOG.md" LogicalName="HashLynx.Changelog.md" />
+    <None Include="../../CHANGELOG.md" Link="CHANGELOG.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Resource Include="../../assets/branding/logo.png" Link="Assets/logo.png" />
     <Resource Include="../../assets/branding/logo_withText.png" Link="Assets/logo_withText.png" />
     <None Include="../../THIRD_PARTY_NOTICES.md" Link="THIRD_PARTY_NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
@@ -27,5 +31,13 @@
   <Target Name="CopyDriveReaderPublish" AfterTargets="Publish">
     <ItemGroup><PublishedDriveReaderFiles Include="$(TargetDir)DriveReader/*" /></ItemGroup>
     <Copy SourceFiles="@(PublishedDriveReaderFiles)" DestinationFolder="$(PublishDir)DriveReader" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyUpdaterBuild" AfterTargets="Build">
+    <ItemGroup><UpdaterFiles Include="../HashLynx.Updater/bin/$(Configuration)/$(TargetFramework)/$(RuntimeIdentifier)/*" Exclude="../HashLynx.Updater/bin/$(Configuration)/$(TargetFramework)/$(RuntimeIdentifier)/*.pdb" /></ItemGroup>
+    <Copy SourceFiles="@(UpdaterFiles)" DestinationFolder="$(TargetDir)Updater" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyUpdaterPublish" AfterTargets="Publish">
+    <ItemGroup><PublishedUpdaterFiles Include="$(TargetDir)Updater/*" /></ItemGroup>
+    <Copy SourceFiles="@(PublishedUpdaterFiles)" DestinationFolder="$(PublishDir)Updater" SkipUnchangedFiles="true" />
   </Target>
 </Project>

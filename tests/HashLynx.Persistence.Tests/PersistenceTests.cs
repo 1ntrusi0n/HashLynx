@@ -15,6 +15,8 @@ public sealed class PersistenceTests : IDisposable
         var settings = await store.LoadSettingsAsync();
         Assert.Equal("Dark", settings.Theme);
         Assert.Empty(settings.DefaultDeviceIds);
+        Assert.False(settings.ExpertMode);
+        Assert.False(settings.CheckForUpdatesAutomatically);
         Assert.Equal(store.Paths.ResultsDirectory, settings.DefaultOutputDirectory);
         Assert.False(File.Exists(Path.Combine(root, "settings.json")));
     }
@@ -97,7 +99,38 @@ public sealed class PersistenceTests : IDisposable
         var file = Path.Combine(root, "settings.json");
         await File.WriteAllTextAsync(file, "{broken");
         await Assert.ThrowsAsync<InvalidDataException>(() => store.LoadSettingsAsync());
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.SaveSettingsAsync(new AppSettings()));
         Assert.Equal("{broken", await File.ReadAllTextAsync(file));
+    }
+
+    [Fact]
+    public async Task UpdatePreferenceIsOptInAndCheckHistoryIsSeparate()
+    {
+        var store = CreateStore();
+        var settingsPath = Path.Combine(root, "settings.json");
+        await File.WriteAllTextAsync(settingsPath, "{\"SchemaVersion\":1,\"Theme\":\"Light\"}");
+        var settings = await store.LoadSettingsAsync();
+        Assert.False(settings.CheckForUpdatesAutomatically);
+        settings.CheckForUpdatesAutomatically = true;
+        await store.SaveSettingsAsync(settings);
+        Assert.True((await CreateStore().LoadSettingsAsync()).CheckForUpdatesAutomatically);
+        var savedSettings = await File.ReadAllTextAsync(settingsPath);
+        var now = DateTimeOffset.UtcNow;
+        await store.SaveUpdateCheckStateAsync(new() { LastAttemptUtc = now });
+        Assert.Equal(now, (await CreateStore().LoadUpdateCheckStateAsync()).LastAttemptUtc);
+        Assert.Equal(savedSettings, await File.ReadAllTextAsync(settingsPath));
+    }
+
+    [Theory]
+    [InlineData("{broken")]
+    [InlineData("{\"SchemaVersion\":999}")]
+    public async Task UnreadableUpdateHistoryIsPreserved(string json)
+    {
+        var store = CreateStore();
+        var path = Path.Combine(root, "update-check.json");
+        await File.WriteAllTextAsync(path, json);
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.LoadUpdateCheckStateAsync());
+        Assert.Equal(json, await File.ReadAllTextAsync(path));
     }
 
     [Fact]
