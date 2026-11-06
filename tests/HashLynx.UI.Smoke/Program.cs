@@ -84,7 +84,7 @@ internal sealed partial class SmokeApplication(string output) : Application
             await CheckSessionHistoryAsync(shell, store, window);
             await CheckSessionResultsIsolationAsync(shell, store, window);
             await CheckZipConfigurationAsync(shell, window);
-            await CheckBitLockerDriveAsync(shell, driveService, window);
+            await CheckBitLockerDriveAsync(shell, services, driveService, window);
 
             shell.Selected = shell.Navigation[0];
             for (var family = 0; family < 6; family++)
@@ -215,11 +215,12 @@ internal sealed partial class SmokeApplication(string output) : Application
         services.Notice = "Saved wordlist library checks passed.";
     }
 
-    private async Task CheckBitLockerDriveAsync(ShellViewModel shell, FakeDriveService drives, Window window)
+    private async Task CheckBitLockerDriveAsync(ShellViewModel shell, AppServices services, FakeDriveService drives, Window window)
     {
         shell.Selected = shell.Navigation[0];
         var inspector = shell.Attack.Inspector;
         inspector.InputMode = 3;
+        await RequireNoBitLockerDisplayAsync(inspector, window);
         await inspector.RefreshDrivesAsync();
         Require(inspector.Drives.Count == 2 && inspector.SelectedDrive is null, "Drive selection must be explicit.");
         inspector.SelectedDrive = inspector.Drives[0];
@@ -227,30 +228,66 @@ internal sealed partial class SmokeApplication(string output) : Application
         Require(await File.ReadAllTextAsync(target) == BitLockerFixtureText + Environment.NewLine, "Drive hashes must enter the normal target workflow.");
         Require(inspector.ExtractionNotice.Contains("Synthetic"), "Drive extraction notes must remain visible.");
         Require(await inspector.PrepareTargetAsync() == target && drives.Extractions == 1, "Prepared targets must not trigger repeated elevation.");
-        await RenderAsync(window, "BitLocker-drive-extracted");
+        await RequireBitLockerDisplayAsync(inspector, window, BitLockerFixtureText);
+        await CheckBitLockerDisplayAfterIdentifyFailureAsync(inspector, services);
+        await RenderBitLockerHashAsync(window, "BitLocker-drive-extracted");
+        var previousWidth = window.Width;
+        window.Width = 1040;
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            AppServices.ApplyTheme(theme);
+            await RequireBitLockerDisplayAsync(inspector, window, BitLockerFixtureText);
+            await RenderBitLockerHashAsync(window, "BitLocker-hash-" + theme + "-narrow");
+        }
+        window.Width = previousWidth;
+        AppServices.ApplyTheme(services.Settings.Theme);
+        inspector.TargetPath = "synthetic volume context changed";
+        await RequireNoBitLockerDisplayAsync(inspector, window);
+        var secondHash = BitLockerFixtureText.Replace("6f972989", "7f972989", StringComparison.Ordinal);
+        drives.Hashes = [BitLockerFixtureText, secondHash];
+        target = await inspector.PrepareTargetAsync();
+        var expectedRecords = string.Join(Environment.NewLine, drives.Hashes);
+        Require(await File.ReadAllTextAsync(target) == expectedRecords + Environment.NewLine, "Every extracted drive record must reach the prepared target in order.");
+        await RequireBitLockerDisplayAsync(inspector, window, expectedRecords);
+        drives.Hashes = [BitLockerFixtureText];
         inspector.SelectedDrive = inspector.Drives[1];
         Require(inspector.PreparedTargetPath is null && inspector.SelectedMode is null && inspector.ExtractionNotice == "", "Changing volumes must clear the old target.");
+        await RequireNoBitLockerDisplayAsync(inspector, window);
         drives.Pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
         var pending = inspector.PrepareTargetAsync();
         Require(inspector.ReadingDrive, "The pending read must expose cancellation.");
         inspector.CancelDriveCommand.Execute(null);
         try { await pending; throw new InvalidOperationException("Expected cancelled drive read."); } catch (OperationCanceledException) { }
         Require(inspector.PreparedTargetPath is null && !inspector.ReadingDrive, "Cancellation must not retain a target or busy state.");
+        await RequireNoBitLockerDisplayAsync(inspector, window);
         drives.Pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
         pending = inspector.PrepareTargetAsync();
         inspector.InputMode = 0;
         try { await pending; throw new InvalidOperationException("Expected cancellation after target change."); } catch (OperationCanceledException) { }
         Require(inspector.PreparedTargetPath is null, "Late drive results must not replace a new target.");
+        await RequireNoBitLockerDisplayAsync(inspector, window);
+        // A delayed implementation that ignores cancellation must still fail the revision check.
+        drives.IgnoreCancellation = true;
+        drives.Pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        inspector.InputMode = 3;
+        pending = inspector.PrepareTargetAsync();
+        inspector.InputMode = 0;
+        drives.Pending.SetResult(new(new ExtractionResult { Success = true, Hashes = [BitLockerFixtureText], SuggestedHashcatModes = [22100] }, null, 4096));
+        try { await pending; throw new InvalidOperationException("Expected stale drive response rejection."); }
+        catch (InvalidOperationException ex) when (ex.Message.StartsWith("The target changed", StringComparison.Ordinal)) { }
+        await RequireNoBitLockerDisplayAsync(inspector, window);
+        drives.IgnoreCancellation = false;
         drives.Pending = null; drives.Error = "No supported password protector.";
         inspector.InputMode = 3;
         try { await inspector.PrepareTargetAsync(); throw new InvalidOperationException("Expected an unsupported protector error."); }
         catch (InvalidOperationException ex) when (ex.Message == drives.Error) { }
         Require(inspector.DriveStatus == drives.Error && inspector.PreparedTargetPath is null, "Unsupported protectors must leave no attack target.");
+        await RequireNoBitLockerDisplayAsync(inspector, window);
         drives.Items = [];
         await inspector.RefreshDrivesAsync();
         Require(inspector.SelectedDrive is null && inspector.Drives.Count == 0, "Removing a device must clear its selection.");
         await RenderAsync(window, "BitLocker-drive-removed");
-        inspector.InputMode = 0;
+        await CheckBitLockerImageDisplayAsync(inspector, services, window);
     }
     private static string BitLockerFixtureText => HashLynx.Extractors.Tests.BitLockerFixture.Hash;
     private sealed class FakeDriveService : IBitLockerDriveService
@@ -258,13 +295,15 @@ internal sealed partial class SmokeApplication(string output) : Application
         public IReadOnlyList<DriveCandidate> Items = [new(@"\\?\Volume{aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa}\", @"E:\", "Synthetic test USB", 16_000_000_000, "Removable"), new(@"\\?\Volume{bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb}\", @"F:\", "Other test volume", 32_000_000_000, "Fixed")];
         public int Extractions;
         public string? Error;
+        public IReadOnlyList<string> Hashes = [BitLockerFixtureText];
+        public bool IgnoreCancellation;
         public TaskCompletionSource<DriveReadResponse>? Pending;
         public Task<IReadOnlyList<DriveCandidate>> DiscoverAsync(CancellationToken ct = default) => Task.FromResult(Items);
         public Task<DriveReadResponse> ExtractAsync(DriveCandidate candidate, CancellationToken ct = default)
         {
             Extractions++;
-            if (Pending is not null) return Pending.Task.WaitAsync(ct);
-            return Task.FromResult(Error is not null ? new DriveReadResponse(null, Error) : new(new ExtractionResult { Success = true, Hashes = [BitLockerFixtureText], SuggestedHashcatModes = [22100], Diagnostics = ["Synthetic drive metadata only."] }, null, 4096));
+            if (Pending is not null) return IgnoreCancellation ? Pending.Task : Pending.Task.WaitAsync(ct);
+            return Task.FromResult(Error is not null ? new DriveReadResponse(null, Error) : new(new ExtractionResult { Success = true, Hashes = Hashes, SuggestedHashcatModes = [22100], Diagnostics = ["Synthetic drive metadata only."] }, null, 4096));
         }
     }
 

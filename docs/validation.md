@@ -1,5 +1,12 @@
 # Validation
 
+## BitLocker extracted hash display / 0.2.2 - 2026-11-06
+
+- Restore and Release build passed with zero warnings/errors. All 613 standard tests passed; 13 backend/live-device cases remained opt-in. Reports: `artifacts/test-results-bitlocker-022`.
+- Offline WPF smoke passed with zero binding errors. Synthetic connected-volume and raw-image fixtures cover exact displayed text, multiple records, selection/read-only behavior, wrapping and placement below Source / context, target changes, cancellation, stale responses, extraction failure, unrelated formats, and retention after later identification fails.
+- The new field was visually reviewed in narrow Light and Dark layouts. Final report and screenshots: `artifacts/ui-smoke-bitlocker-022-reviewed` (`bitlocker-display-result.txt`, `BitLocker-hash-Light-narrow.png`, `BitLocker-hash-Dark-narrow.png`).
+- No live volume, original backend, or user recovery data was used for these checks. The extraction and drive-helper implementations are unchanged.
+
 ## Markdown release information / 0.2.1 - 2026-11-06
 
 - Restore and Release build passed with zero warnings/errors. All 613 standard tests passed; 13 backend/live-device cases remained opt-in. No backend or live-device execution was needed for this presentation change. Unit reports: `artifacts/test-results-markdown-021`.

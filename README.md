@@ -4,7 +4,7 @@
 
 A local Windows desktop workspace for **Hashcat**: inspect recovery targets, configure attacks, monitor jobs, and review results from one native WPF interface.
 
-**Version 0.2.1 — Created by err0r.** HashLynx orchestrates the official Hashcat executable; it does not implement a cracking engine. It is intended for legitimate password recovery, authorized security auditing, research, labs, and CTFs.
+**Version 0.2.2 — Created by err0r.** HashLynx orchestrates the official Hashcat executable; it does not implement a cracking engine. It is intended for legitimate password recovery, authorized security auditing, research, labs, and CTFs.
 
 HashLynx is an independent GUI frontend. Hashcat is a separate third-party project, is not developed by HashLynx, and does not sponsor or endorse this application. Users must separately obtain and configure Hashcat. This repository and its publish output do not bundle it.
 
@@ -168,6 +168,8 @@ ZIP works immediately without configuration. It supports stored/deflated ZipCryp
 RAR and 7-Zip also work without configuration. RAR supports RAR3 encrypted headers and stored/compressed members, and RAR5 password verifiers. 7-Zip supports encrypted headers, compressed metadata, and ordinary or solid encrypted streams using Copy, LZMA, LZMA2 or Deflate. They read archives locally without unpacking files. Unsupported variants produce diagnostics. To use another extractor, run it separately and import its Hashcat-compatible output through Hash File. See [format coverage and limits](docs/extractors.md).
 
 BitLocker can read a connected volume through **BitLocker Drive > Refresh drives > Extract and analyze (admin)**. Approve the UAC prompt for the bundled read-only helper; the main app and Hashcat remain unelevated. Keep the complete application folder together, including `DriveReader/`. See [drive extraction and limits](docs/bitlocker-drives.md).
+
+After a successful BitLocker extraction, **Extracted BitLocker hash** appears directly below **Source / context** and the extraction button. Select the text and press **Ctrl+C** to copy it; each extracted password protector appears on its own line. This works for connected volumes and raw partition images. Choosing another target clears the previous display.
 
 BitLocker also reads raw Windows 7+ partition images with a user-password protector, including BitLocker To Go and used-space-only layouts. It needs no Python or external script. It emits authenticated type-1 records for mode 22100 and can use a backup when primary metadata is damaged. It does not mount or decrypt disks. TPM/PIN protectors, recovery-password cracking, Vista metadata and automatic whole-disk partition discovery are unsupported. See [extractor details](docs/extractors.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
 

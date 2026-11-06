@@ -4,6 +4,12 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-11-06
+
+### Added
+
+- Successful BitLocker extraction now displays the hash directly below Source / context and the extraction button. The read-only, selectable field supports copying all extracted password-protector records from connected volumes or raw partition images and clears when the target changes.
+
 ## [0.2.1] - 2026-11-06
 
 ### Fixed
