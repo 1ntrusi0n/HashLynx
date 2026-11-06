@@ -6,7 +6,8 @@ namespace HashLynx.UI.Services;
 public static class ApplicationInfo
 {
     public static string Version { get; } = typeof(ApplicationInfo).Assembly
-        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.2.0";
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0]
+        ?? typeof(ApplicationInfo).Assembly.GetName().Version?.ToString(3) ?? "Unknown";
 
     public static string Changelog { get; } = ReadChangelog();
 

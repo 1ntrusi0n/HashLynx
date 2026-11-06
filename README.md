@@ -4,7 +4,7 @@
 
 A local Windows desktop workspace for **Hashcat**: inspect recovery targets, configure attacks, monitor jobs, and review results from one native WPF interface.
 
-**Version 0.2.0 — Created by err0r.** HashLynx orchestrates the official Hashcat executable; it does not implement a cracking engine. It is intended for legitimate password recovery, authorized security auditing, research, labs, and CTFs.
+**Version 0.2.1 — Created by err0r.** HashLynx orchestrates the official Hashcat executable; it does not implement a cracking engine. It is intended for legitimate password recovery, authorized security auditing, research, labs, and CTFs.
 
 HashLynx is an independent GUI frontend. Hashcat is a separate third-party project, is not developed by HashLynx, and does not sponsor or endorse this application. Users must separately obtain and configure Hashcat. This repository and its publish output do not bundle it.
 
@@ -21,7 +21,7 @@ Download the Windows x64 application from [GitHub Releases](https://github.com/1
 - Automatic validation when starting recovery, with run options, a copyable command preview, and a separate Preflight button in Expert mode. Commands execute with `ProcessStartInfo.ArgumentList`, never through a shell.
 - A live **Ready to recover** checklist for the target, attack inputs and device setup, with direct links to the relevant controls and colors that distinguish ready, missing and pending items.
 - Asynchronous jobs, parsed JSON status metrics, stop, job history, interrupted-job detection, and validated restoration from compatible checkpoints.
-- Offline release history in Settings / About, optional GitHub version checks, and user-approved application updates with package verification and rollback.
+- Formatted Markdown release history in Settings / About and update release notes, with selectable text, theme-aware headings/lists/code/tables, and links that copy their address when activated. Optional GitHub version checks and user-approved application updates include package verification and rollback.
 - Session-specific recovered results, an all-sessions view, plaintext hide/reveal, copy, and export. Completion banners link to results; optional Windows notifications keep passwords hidden. Hardware discovery includes a bounded known-answer recovery test per device.
 - An extensible extractor registry for PDF, ZIP, RAR, 7-Zip, BitLocker, Microsoft Office, and KeePass. All seven formats are built in and need no extractor configuration.
 - Wordlist library names, cached background line counts, missing-file repair, and cancellable combine/deduplicate/byte-length filtering into new files.

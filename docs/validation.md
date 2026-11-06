@@ -1,5 +1,12 @@
 # Validation
 
+## Markdown release information / 0.2.1 - 2026-11-06
+
+- Restore and Release build passed with zero warnings/errors. All 613 standard tests passed; 13 backend/live-device cases remained opt-in. No backend or live-device execution was needed for this presentation change. Unit reports: `artifacts/test-results-markdown-021`.
+- Final offline WPF smoke passed with zero binding errors. New checks cover the actual changelog/release-note bindings, headings, bold/italic/strikethrough, code, quotes, nested/numbered lists, tables, reference/relative links, selectable read-only text, HTML entities, malformed/unresolved literal text, dynamic content/theme changes, and inert HTML/images/unsafe link schemes.
+- Reviewed the actual Settings views at narrow width and dedicated Markdown fixtures in Light and Dark themes. Text wraps, scrolls and remains readable. Reports/screenshots: `artifacts/ui-smoke-markdown-021-verified` (`markdown-result.txt`, `Changelog-narrow.png`, `Markdown-Light-narrow.png`, `Markdown-Dark-narrow.png`).
+- Markdig 1.6.0 has no additional runtime package dependencies for .NET 10. Its assembly is explicitly included in the update manifest, and its BSD-2-Clause notice is included in the published third-party notices.
+
 ## HashLynx 0.2.0 / Hashcat 8 - 2026-11-06
 
 - Solution restore and final Release build passed with zero warnings/errors. The final standard suite passed all 613 tests (51 Core, 236 Hashcat, 54 Persistence, 216 Extractors/Drives, 56 Updates); 13 backend/live-device cases remained opt-in and were skipped. TRX reports are in ignored `artifacts/test-results-v020-final`.

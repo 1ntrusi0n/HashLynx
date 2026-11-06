@@ -9,6 +9,7 @@
     <RootNamespace>HashLynx.UI</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Markdig" Version="1.6.0" />
     <ProjectReference Include="../HashLynx.Core/HashLynx.Core.csproj" />
     <ProjectReference Include="../HashLynx.Hashcat/HashLynx.Hashcat.csproj" />
     <ProjectReference Include="../HashLynx.Extractors/HashLynx.Extractors.csproj" />

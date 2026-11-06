@@ -2,6 +2,8 @@
 
 Open **Settings / About** and choose **Check for Updates**. A newer stable GitHub release shows its version, size and notes. Choose **Download update** to retrieve and verify it, then **Restart and update** when recovery and other work are idle. Closing the app normally does not install a staged update.
 
+The changelog and release notes display formatted Markdown, including headings, lists, emphasis, code, quotes, and tables. Select text to copy it, or activate a link to copy its address. Both views follow the application theme and remain scrollable at smaller window sizes. External images and HTML are not loaded.
+
 **Check for Updates Automatically** is unchecked by default. Save preferences to enable it. Startup checks run at most once every 24 hours; a manual check can run sooner. Checking only retrieves public release metadata. Hashes, encrypted files, passwords, wordlists and job information are never sent. The changelog included in About remains available offline.
 
 Only HashLynx is updated. Obtain Hashcat, compute drivers and .NET runtimes separately. Existing settings, queues, targets, histories and results stay in the normal LocalApplicationData workspace. Queues do not restart automatically after an update. Earlier experimental data is not imported.

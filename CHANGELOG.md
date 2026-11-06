@@ -4,6 +4,16 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-06
+
+### Fixed
+
+- The in-app changelog and update release notes now render Markdown headings, emphasis, lists, links, code, quotes, and tables in a selectable, scrolling view that follows the application theme. Activate a link to copy its address; external images and HTML are never loaded.
+
+### Changed
+
+- Added the BSD-2-Clause licensed Markdig parser with native WPF document rendering. Portable packages and update manifests include its runtime assembly and license notice.
+
 ## [0.2.0] - 2026-11-06
 
 ### Added

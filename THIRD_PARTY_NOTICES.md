@@ -6,6 +6,34 @@ HashLynx is an independent application. Hashcat is a separate third-party projec
 
 [Hashcat](https://hashcat.net/hashcat/) is an MIT-licensed backend. Users separately obtain an official release and configure it. The local `hashcat/` folder is ignored by Git and is not included in this repository or the application publish output. Hashcat's own `docs/license.txt` and `docs/license_libs/` contain its copyright and dependency notices; do not remove or replace them.
 
+## Markdown rendering
+
+[Markdig 1.6.0](https://github.com/xoofx/markdig/releases/tag/1.6.0) parses the changelog and release-note Markdown. HashLynx renders its syntax tree using native WPF documents. Markdig is distributed under the BSD-2-Clause license; its [upstream notice](https://github.com/xoofx/markdig/blob/1.6.0/license.txt) is reproduced here:
+
+```text
+Copyright (c) 2016-2026, Alexandre Mutel
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification
+, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
 ## Built-in common mask list
 
 The versioned `common-1000-v1` mask asset adapts the first 1,000 distinct structures in Hashcat v7.1.2's [RockYou mask list](https://github.com/hashcat/hashcat/blob/c75f446c44cd3f0742035a1394416c39bee5ea8f/masks/rockyou-2-1800.hcmask). These are character-class patterns, not passwords. The original MIT license, Copyright (c) 2015-2025 Jens Steube, is retained in full in the embedded and materialized `.hcmask` file and in [the source snapshot license](scripts/mask-sources/HASHCAT-LICENSE.txt). The offline selection recipe and source limitations are described in [built-in masks](docs/built-in-masks.md).

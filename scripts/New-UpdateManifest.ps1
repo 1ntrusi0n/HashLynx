@@ -12,14 +12,14 @@ if (-not $Version) {
 if ($Version -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') { throw 'A stable major.minor.patch version is required.' }
 if ((Test-Path -LiteralPath (Join-Path $publishRoot '.git')) -or (Test-Path -LiteralPath (Join-Path $publishRoot 'src'))) { throw 'Refusing to package a source tree.' }
 $files = [System.Collections.Generic.List[object]]::new()
-$required = @('HashLynx.exe', 'HashLynx.dll', 'HashLynx.deps.json', 'HashLynx.runtimeconfig.json',
+$required = @('HashLynx.exe', 'HashLynx.dll', 'HashLynx.deps.json', 'HashLynx.runtimeconfig.json', 'Markdig.dll',
     'DriveReader/HashLynx.DriveReader.exe', 'DriveReader/HashLynx.DriveReader.dll', 'DriveReader/HashLynx.DriveReader.runtimeconfig.json',
     'Updater/HashLynx.Updater.exe', 'Updater/HashLynx.Updater.dll', 'Updater/HashLynx.Updater.deps.json',
     'Updater/HashLynx.Updater.runtimeconfig.json', 'Updater/HashLynx.Updates.dll', 'LICENSE', 'THIRD_PARTY_NOTICES.md')
 # Exact product filenames are reserved for updates; a similarly named user file must never become updater-owned.
 # Keep this inventory in sync when adding a new product assembly. The SDK also publishes helper apphosts at the root.
 $inventory = @{
-    '' = @('HashLynx.exe', 'HashLynx.dll', 'HashLynx.deps.json', 'HashLynx.runtimeconfig.json',
+    '' = @('HashLynx.exe', 'HashLynx.dll', 'HashLynx.deps.json', 'HashLynx.runtimeconfig.json', 'Markdig.dll',
         'HashLynx.Core.dll', 'HashLynx.Hashcat.dll', 'HashLynx.Extractors.dll', 'HashLynx.Persistence.dll', 'HashLynx.Drives.dll', 'HashLynx.Updates.dll',
         'HashLynx.DriveReader.exe', 'HashLynx.DriveReader.dll', 'HashLynx.DriveReader.deps.json', 'HashLynx.DriveReader.runtimeconfig.json',
         'HashLynx.Updater.exe', 'HashLynx.Updater.dll', 'HashLynx.Updater.deps.json', 'HashLynx.Updater.runtimeconfig.json',

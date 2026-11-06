@@ -23,8 +23,8 @@ internal sealed partial class SmokeApplication
         await shell.InitializeAsync();
         Require(fake.Checks == 0, "Startup must not check for updates unless enabled.");
         Require(!shell.Settings.CheckForUpdatesAutomatically && !shell.Attack.Expert, "New users start in Beginner with update checks disabled.");
-        Require(shell.Settings.Version == "HashLynx 0.2.0", "About uses the actual assembly version.");
-        Require(shell.Settings.Changelog.Contains("0.2.0", StringComparison.Ordinal), "The offline changelog includes this release.");
+        Require(shell.Settings.Version == "HashLynx " + ApplicationInfo.Version, "About uses the actual assembly version.");
+        Require(shell.Settings.Changelog.Contains(ApplicationInfo.Version, StringComparison.Ordinal), "The offline changelog includes this release.");
         window.DataContext = shell;
         try
         {
@@ -43,7 +43,8 @@ internal sealed partial class SmokeApplication
             await ((AsyncCommand)shell.Settings.Updates.CheckCommand).ExecuteAsync();
             Require(fake.Checks == 1 && shell.Settings.Updates.HasRelease, "Manual checks display newer releases.");
             Require(fake.Downloads == 0, "Checking must not download a release.");
-            Require(shell.Settings.Updates.ReleaseNotes.Contains("Fixture release", StringComparison.Ordinal), "Release notes are shown as text.");
+            Require(shell.Settings.Updates.ReleaseNotes.Contains("Fixture release", StringComparison.Ordinal), "Release notes are shown.");
+            await CheckMarkdownAsync(shell, window);
             shell.Settings.CheckForUpdatesAutomatically = true;
             shell.Settings.Expert = true;
             await ((AsyncCommand)shell.Settings.SaveCommand).ExecuteAsync();
@@ -143,7 +144,7 @@ internal sealed partial class SmokeApplication
             cancellationToken.ThrowIfCancellationRequested();
             Checks++;
             if (Failure is not null) return Task.FromException<UpdateCheckResult>(Failure);
-            return Task.FromResult(new UpdateCheckResult(new("0.3.0", "Fixture release\nNew features and fixes.",
+            return Task.FromResult(new UpdateCheckResult(new("0.3.0", "# Fixture release\n\nNew **features** and fixes.\n\n- Formatted release notes\n- Readable recovery improvements",
                 new Uri("https://github.com/1ntrusi0n/HashLynx/releases/tag/v0.3.0"),
                 new("HashLynx-win-x64.zip", new Uri("https://github.com/1ntrusi0n/HashLynx/releases/download/v0.3.0/HashLynx-win-x64.zip"), 12345, new string('a', 64))), "A newer release is available."));
         }
