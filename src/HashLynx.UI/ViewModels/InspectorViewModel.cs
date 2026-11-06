@@ -21,13 +21,25 @@ public sealed class InspectorViewModel : ObservableObject
     private string _validationMessage = "";
     private string _extractionNotice = "";
     public string ExtractionNotice { get => _extractionNotice; private set => Set(ref _extractionNotice, value); }
-    private string _extractedBitLockerHash = "";
-    public string ExtractedBitLockerHash
+    private const int ExtractedHashPreviewLimit = 16_384;
+    private string _extractedHash = "";
+    public string ExtractedHash
     {
-        get => _extractedBitLockerHash;
-        private set { if (Set(ref _extractedBitLockerHash, value)) Raise(nameof(HasExtractedBitLockerHash)); }
+        get => _extractedHash;
+        private set
+        {
+            if (!Set(ref _extractedHash, value)) return;
+            Raise(nameof(HasExtractedHash)); Raise(nameof(ExtractedHashPreview)); Raise(nameof(ExtractedHashDisplayNotice));
+            CommandManager.InvalidateRequerySuggested();
+        }
     }
-    public bool HasExtractedBitLockerHash => ExtractedBitLockerHash.Length > 0;
+    public bool HasExtractedHash => ExtractedHash.Length > 0;
+    public string ExtractedHashPreview => ExtractedHash.Length <= ExtractedHashPreviewLimit ? ExtractedHash : ExtractedHash[..ExtractedHashPreviewLimit];
+    private string _extractedHashLabel = "Extracted hash";
+    public string ExtractedHashLabel { get => _extractedHashLabel; private set => Set(ref _extractedHashLabel, value); }
+    public string ExtractedHashDisplayNotice => ExtractedHash.Length > ExtractedHashPreviewLimit
+        ? $"Showing the first {ExtractedHashPreviewLimit:N0} of {ExtractedHash.Length:N0} characters. Use Copy full hash to copy all extracted records."
+        : "Select the hash and press Ctrl+C, or use Copy full hash. Each record appears on its own line.";
     private IReadOnlyList<int> _extractionSuggestedModes = [];
     public int InputMode { get => _inputMode; set { if (Set(ref _inputMode, value)) { Invalidate(); Raise(nameof(AnalyzeButtonText)); } } }
     public string AnalyzeButtonText => InputMode == 3 ? "Extract and analyze (admin)" : "Analyze target";
@@ -58,6 +70,7 @@ public sealed class InspectorViewModel : ObservableObject
     public ICommand DropCommand { get; }
     public ICommand AnalyzeCommand { get; }
     public ICommand RefreshCatalogCommand { get; }
+    public ICommand CopyExtractedHashCommand { get; }
     public InspectorViewModel(AppServices services)
     {
         _services = services;
@@ -68,6 +81,12 @@ public sealed class InspectorViewModel : ObservableObject
         RefreshCatalogCommand = new AsyncCommand(_ => LoadCatalogAsync(), services.ReportError);
         RefreshDrivesCommand = new AsyncCommand(_ => RefreshDrivesAsync(), services.ReportError, _ => !ReadingDrive);
         CancelDriveCommand = new RelayCommand(_ => { Invalidate(); DriveStatus = "Drive read cancelled."; }, _ => ReadingDrive);
+        CopyExtractedHashCommand = new RelayCommand(_ =>
+        {
+            if (!HasExtractedHash) return;
+            try { services.Dialogs.Copy(ExtractedHash); services.Notice = "The full extracted hash was copied to your Windows clipboard."; }
+            catch (System.Runtime.InteropServices.ExternalException) { services.Notice = "The Windows clipboard is busy. Try Copy full hash again."; }
+        }, _ => HasExtractedHash);
     }
     public async Task RefreshDrivesAsync()
     {
@@ -78,7 +97,7 @@ public sealed class InspectorViewModel : ObservableObject
         SelectedDrive = Drives.FirstOrDefault(drive => drive.VolumeId == previous);
         DriveStatus = Drives.Count == 0 ? "No local drives are available. Connect the device and refresh." : "Select the correct volume by letter, label and size. BitLocker password support is checked when extracting.";
     }
-    private void Invalidate() { _targetCancellation.Cancel(); _targetCancellation.Dispose(); _targetCancellation = CancellationTokenSource.CreateLinkedTokenSource(_services.LifetimeToken); _revision++; PreparedTargetPath = null; ExtractionNotice = ""; ExtractedBitLockerHash = ""; _extractionSuggestedModes = []; Matches.Clear(); SelectedMode = null; ValidationMessage = ""; Summary = "Target changed. Analyze it or choose a hash mode explicitly."; Problems = ""; Raise(nameof(PreparedTargetPath)); Raise(nameof(TargetRevision)); }
+    private void Invalidate() { _targetCancellation.Cancel(); _targetCancellation.Dispose(); _targetCancellation = CancellationTokenSource.CreateLinkedTokenSource(_services.LifetimeToken); _revision++; PreparedTargetPath = null; ExtractionNotice = ""; ExtractedHash = ""; ExtractedHashLabel = "Extracted hash"; _extractionSuggestedModes = []; Matches.Clear(); SelectedMode = null; ValidationMessage = ""; Summary = "Target changed. Analyze it or choose a hash mode explicitly."; Problems = ""; Raise(nameof(PreparedTargetPath)); Raise(nameof(TargetRevision)); }
     private void VerifyRevision(long revision) { if (revision != _revision) throw new InvalidOperationException("The target changed while analysis was running. Analyze the current target again."); }
     public async Task LoadCatalogAsync()
     {
@@ -103,7 +122,8 @@ public sealed class InspectorViewModel : ObservableObject
         cancellationToken.ThrowIfCancellationRequested();
         var target = TargetPath;
         string? prepared = null;
-        var extractedBitLockerHash = "";
+        var extractedHash = "";
+        var extractedHashLabel = "Extracted hash";
         if (InputMode == 0)
         {
             if (string.IsNullOrWhiteSpace(HashText)) throw new InvalidOperationException("Paste a hash in Target Inspector first.");
@@ -127,9 +147,10 @@ public sealed class InspectorViewModel : ObservableObject
                 var result = response.Extraction;
                 if (result is not { Success: true } || result.Hashes.Count == 0)
                     throw new InvalidOperationException(response.Error ?? string.Join(Environment.NewLine, result?.Diagnostics ?? ["The drive reader returned no supported password records."]));
-                prepared = await _services.Store.Paths.CreateTargetAsync(string.Join(Environment.NewLine, result.Hashes) + Environment.NewLine, cancellationToken);
+                extractedHash = string.Join(Environment.NewLine, result.Hashes);
+                prepared = await _services.Store.Paths.CreateTargetAsync(extractedHash + Environment.NewLine, cancellationToken);
                 VerifyRevision(revision);
-                extractedBitLockerHash = string.Join(Environment.NewLine, result.Hashes);
+                extractedHashLabel = "Extracted BitLocker hash";
                 ExtractionNotice = string.Join(Environment.NewLine, result.Diagnostics);
                 _extractionSuggestedModes = result.SuggestedHashcatModes;
                 DriveStatus = $"Read {response.BytesRead:N0} bytes of metadata. Extracted {result.Hashes.Count} password record(s). The drive can remain connected or be removed safely through Windows.";
@@ -150,11 +171,13 @@ public sealed class InspectorViewModel : ObservableObject
                 if (!availability.IsAvailable) { diagnostics.Add($"{extractor.DisplayName}: {availability.Diagnostic}"); continue; }
                 VerifyRevision(revision);
                 var result = await extractor.ExtractAsync(target, cancellationToken);
+                VerifyRevision(revision); cancellationToken.ThrowIfCancellationRequested();
                 if (!result.Success) { diagnostics.AddRange(result.Diagnostics); continue; }
-                prepared = await _services.Store.Paths.CreateTargetAsync(string.Join(Environment.NewLine, result.Hashes) + Environment.NewLine, cancellationToken);
+                if (result.Hashes.Count == 0) { diagnostics.Add($"{extractor.DisplayName} returned no supported hash records."); continue; }
+                extractedHash = string.Join(Environment.NewLine, result.Hashes);
+                prepared = await _services.Store.Paths.CreateTargetAsync(extractedHash + Environment.NewLine, cancellationToken);
                 VerifyRevision(revision);
-                if (result.SourceFileType.Equals("bitlocker", StringComparison.OrdinalIgnoreCase))
-                    extractedBitLockerHash = string.Join(Environment.NewLine, result.Hashes);
+                extractedHashLabel = $"Extracted {extractor.DisplayName} hash";
                 Summary = $"{result.ExtractorName} extracted {result.Hashes.Count} hash record(s).";
                 ExtractionNotice = string.Join(Environment.NewLine, result.Diagnostics);
                 _extractionSuggestedModes = result.SuggestedHashcatModes;
@@ -165,7 +188,8 @@ public sealed class InspectorViewModel : ObservableObject
         VerifyRevision(revision);
         cancellationToken.ThrowIfCancellationRequested();
         PreparedTargetPath = prepared;
-        ExtractedBitLockerHash = extractedBitLockerHash;
+        ExtractedHashLabel = extractedHashLabel;
+        ExtractedHash = extractedHash;
         Raise(nameof(PreparedTargetPath));
         return PreparedTargetPath;
     }

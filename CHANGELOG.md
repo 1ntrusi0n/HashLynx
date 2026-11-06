@@ -4,6 +4,17 @@ All notable changes to HashLynx are documented here. This file follows [Keep a C
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-11-06
+
+### Added
+
+- Encrypted File now displays extracted PDF, Office, ZIP, RAR, 7-Zip, and KeePass hashes below Source / context and the analysis button, matching the BitLocker workflow. The selectable display identifies the format and clears when the target changes.
+- **Copy full hash** copies every extracted record for encrypted files and BitLocker. Long hashes use a clearly labeled, bounded preview while keeping the complete records for copying and recovery.
+
+### Fixed
+
+- Empty successful extractor responses cannot create a recovery target, and cancelled or outdated extraction results cannot populate the hash display.
+
 ## [0.2.3] - 2026-11-06
 
 ### Added

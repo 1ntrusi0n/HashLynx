@@ -1,5 +1,13 @@
 # Validation
 
+## Encrypted-file extracted hash display / 0.2.4 - 2026-11-06
+
+- Restore and final Release build passed with zero warnings/errors. All 732 standard tests passed; 13 backend/live-device cases remained opt-in. Reports: `artifacts/test-results-extracted-hash-024`.
+- Offline WPF smoke passed with zero binding errors. Native PDF, Word, Excel, ZIP, RAR, 7-Zip and KeePass fixtures verify exact displayed records, format labels, source-file preservation, saved-target parity and retention after later identification fails. Existing synthetic BitLocker drive and image checks still pass.
+- Additional display checks cover an 80,057-character multi-record result, a bounded 16,384-character preview, full-record retention, copy-command availability, input changes, empty/failed extraction, cancellation and stale results. Tests did not change the clipboard. Source review confirms the copy action uses the complete records.
+- Narrow Light/Dark screenshots and the large preview were visually reviewed for placement below Source / context, readable wrapping, bounded scrolling and visible copy guidance. Evidence: `artifacts/ui-smoke-extracted-hash-024` (`encrypted-hash-display-result.txt`, `bitlocker-display-result.txt`, `result.txt` and screenshots).
+- No backend process, GPU, live volume or user recovery data was used. Extractor implementations, original backend and local source collections remain unchanged.
+
 ## Wordlist progress and adaptive timing / 0.2.3 - 2026-11-06
 
 - Restore and final Release build passed with zero warnings/errors. All 732 standard tests passed (122 Core, 257 Hashcat, 81 Persistence, 216 Extractors/Drives, 56 Updates); 13 backend/live-device cases remained opt-in. Reports: `artifacts/test-results-progress-023`.

@@ -4,7 +4,7 @@
 
 A local Windows desktop workspace for **Hashcat**: inspect recovery targets, configure attacks, monitor jobs, and review results from one native WPF interface.
 
-**Version 0.2.3 — Created by 1ntrusi0n.** HashLynx orchestrates the official Hashcat executable; it does not implement a cracking engine. It is intended for legitimate password recovery, authorized security auditing, research, labs, and CTFs.
+**Version 0.2.4 — Created by 1ntrusi0n.** HashLynx orchestrates the official Hashcat executable; it does not implement a cracking engine. It is intended for legitimate password recovery, authorized security auditing, research, labs, and CTFs.
 
 HashLynx is an independent GUI frontend. Hashcat is a separate third-party project, is not developed by HashLynx, and does not sponsor or endorse this application. Users must separately obtain and configure Hashcat. This repository and its publish output do not bundle it.
 
@@ -34,6 +34,8 @@ Hashcat's `--identify` is the primary authority. A unique match is selected auto
 For hash files, a streaming scan counts total, blank, candidate, and problem lines, with bounded structural grouping and problem-line summaries. These structural checks do not prove that every line is a valid hash for the selected mode. The original file is never cleaned or modified in place.
 
 Paste and extracted targets are saved as local working target files so child-process arguments do not need to contain the hash itself. Catalog parsing is isolated and cached by backend version. An older backend without optional identification or JSON-status support can still be configured; unsupported functionality produces a clear message.
+
+After successful extraction in **Encrypted File**, the hash appears below **Source / context** and **Analyze target**, labeled with its format (PDF, Microsoft Office, ZIP, RAR, 7-Zip, KeePass, or BitLocker). Select the text and press **Ctrl+C**, or choose **Copy full hash** to copy every extracted record. Long hashes show a preview of the first 16,384 characters; copying with the button and recovery both use the complete records. Changing the target or input type clears the previous display.
 
 On **Jobs**, wordlist line counts appear beneath **Checking password guesses**. Percentages measure guessing work, including rule variations; they are distinct from physical file lines. Remaining-time and active-duration estimates adjust to the current pass's observed progress, exclude pauses, and stop when status becomes stale. See [job progress and timing](docs/job-progress.md) for multi-wordlist, restore, and estimate limitations.
 
@@ -171,7 +173,7 @@ RAR and 7-Zip also work without configuration. RAR supports RAR3 encrypted heade
 
 BitLocker can read a connected volume through **BitLocker Drive > Refresh drives > Extract and analyze (admin)**. Approve the UAC prompt for the bundled read-only helper; the main app and Hashcat remain unelevated. Keep the complete application folder together, including `DriveReader/`. See [drive extraction and limits](docs/bitlocker-drives.md).
 
-After a successful BitLocker extraction, **Extracted BitLocker hash** appears directly below **Source / context** and the extraction button. Select the text and press **Ctrl+C** to copy it; each extracted password protector appears on its own line. This works for connected volumes and raw partition images. Choosing another target clears the previous display.
+After a successful BitLocker extraction, **Extracted BitLocker hash** appears directly below **Source / context** and the extraction button. Select the text and press **Ctrl+C**, or use **Copy full hash**; each extracted password protector appears on its own line. This works for connected volumes and raw partition images. Choosing another target clears the previous display.
 
 BitLocker also reads raw Windows 7+ partition images with a user-password protector, including BitLocker To Go and used-space-only layouts. It needs no Python or external script. It emits authenticated type-1 records for mode 22100 and can use a backup when primary metadata is damaged. It does not mount or decrypt disks. TPM/PIN protectors, recovery-password cracking, Vista metadata and automatic whole-disk partition discovery are unsupported. See [extractor details](docs/extractors.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
 
